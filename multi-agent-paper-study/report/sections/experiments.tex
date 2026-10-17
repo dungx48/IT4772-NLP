@@ -1,0 +1,33 @@
+\section{Thiết kế và triển khai thực nghiệm}\label{sec:experiments}
+
+\subsection{Mục tiêu thực nghiệm}
+Phần này trả lời câu hỏi: với tài nguyên thông thường (máy cá nhân, không GPU lớn, không gọi API LLM trả phí), có thể kiểm chứng được những gì từ hai paper?
+
+Đối với Agent-Radar, việc tái hiện đúng thí nghiệm gốc là không khả thi: cần chạy LLM cục bộ quy mô 4--32B tham số với backend can thiệp attention (SPA) trên năm bộ benchmark. Phần có thể làm trung thực là \emph{cơ chế chọn ngữ cảnh} (Eq.~\ref{eq:ar-decay}--\ref{eq:ar-select}): các công thức này tự chứa, không cần LLM, chỉ cần một sentence encoder. Vì vậy thí nghiệm 1 đánh giá chất lượng của bộ chọn ngữ cảnh -- không đánh giá hiệu ứng lái attention lên câu trả lời của LLM. Mọi kết quả của thí nghiệm này được trình bày với tư cách \emph{phiên bản minh họa}, không phải tái hiện Agent-Radar.
+
+Đối với DAIN, kiến trúc lõi (Eq.~\ref{eq:dain-ctx}--\ref{eq:dain-loss}) là một mô hình nhỏ có công thức tường minh nên có thể hiện thực và huấn luyện được. Phần không thể làm là encoder gốc (ResNet-50, BERT-base) và bốn trong năm bộ dữ liệu gốc (ADNI, MIMIC-IV cần đăng ký; MOSI cần đặc trưng cỡ lớn). Thí nghiệm 2 vì vậy là \emph{bản đơn giản hóa trung thực}: giữ nguyên cấu trúc thuật toán, thay encoder bằng bản nhẹ, chạy trên một bộ dữ liệu thật duy nhất (ENRICO) trong năm bộ của paper.
+
+\subsection{Môi trường và thư viện}
+Mọi thí nghiệm chạy trên một máy cá nhân: Windows 11, Python 3.13, CPU, không dùng GPU. Thư viện: torch 2.14 (huấn luyện), sentence-transformers (all-MiniLM-L6-v2 -- đúng encoder mà Agent-Radar dùng), scikit-learn, pandas, matplotlib. Toàn bộ mã nguồn, cấu hình và seed nằm trong thư mục \texttt{experiments/} của dự án; hướng dẫn chạy lại trong \texttt{README.md}. Đơn vị đo thời gian là giờ đồng hồ trên máy này và chỉ mang ý nghĩa so sánh tương đối giữa các chiến lược.
+
+\subsection{Bộ dữ liệu}
+\textbf{HotpotQA}~\cite{yang2018hotpotqa} (bản distractor, tập validation): mỗi mẫu gồm một câu hỏi, mười đoạn văn Wikipedia (2 đoạn chứa đáp án, 8 đoạn gây nhiễu) và danh sách supporting facts chỉ ra chính xác các câu chứa bằng chứng vàng. Nhãn câu-vàng cho phép đo chính xác mức độ ``giữ đúng thông tin'' của từng chiến lược chọn ngữ cảnh. Lấy 200 mẫu theo seed cố định.
+
+\textbf{ENRICO}~\cite{leiva2020enrico}: 1460 màn hình ứng dụng di động, mỗi màn hình có ảnh chụp và cây phân cấp giao diện (chứa tên lớp, resource-id và nội dung văn bản của các thành phần UI), được gán một trong 20 chủ đề thiết kế. Độ nhỏ và tính công khai của bộ dữ liệu này khiến nó phù hợp để huấn luyện lặp lại nhiều seed trên CPU. Chia 70/10/20 phân tầng theo nhãn với seed cố định (không xác minh được đúng split gốc mà DAIN dùng).
+
+\subsection{Các phương pháp đối chứng}
+Thí nghiệm 1 so bốn chiến lược chọn ngữ cảnh, xếp theo mức gần với paper: (i) \texttt{full} -- giữ toàn bộ lịch sử, tương ứng baseline của hệ MAS không quản lý ngữ cảnh; (ii) \texttt{window} -- chỉ giữ vòng trao đổi gần nhất; (iii) \texttt{semantic} -- chỉ lọc theo cosine ngữ nghĩa với ngưỡng $\theta$, tương ứng biến thể ablation ``bỏ cả hai hệ số suy giảm'' trong Table~4 của paper; (iv) \texttt{radar} -- đúng công thức Eq.~\ref{eq:ar-decay}--\ref{eq:ar-select} với $\lambda_s=\lambda_t=0{,}92$, $\theta=0{,}65$ (giá trị mặc định của paper), tên gọi là \emph{phiên bản minh họa} vì thiếu thành phần lái attention.
+
+Thí nghiệm 2 so bảy mô hình: Early Fusion, Late Fusion, Static MoE, Sparse MoE (cùng pool 8 expert), và ba biến thể DAIN -- DAIN-Static (mọi tác tử luôn bật), DAIN-NoComm (không trao đổi), DAIN đầy đủ -- đúng cấu trúc ablation trong Table~4 của paper DAIN. Baseline MMoE không chạy vì với một nhiệm vụ duy nhất MMoE suy biến về Static MoE (MMoE khác ở việc mỗi nhiệm vụ có một gate riêng).
+
+\subsection{Quy trình triển khai}
+\textbf{Thí nghiệm 1} (tệp \texttt{src/exp1/}): với mỗi mẫu HotpotQA, mô phỏng $P$ tác tử trao đổi trong $T$ vòng trên đồ thị ngẫu nhiên. Thông điệp của một tác tử gồm: (a) \emph{tín hiệu} -- câu vàng, mà các tác tử ``chuyên gia'' tự truy xuất được, còn tác tử thường chỉ lặp lại được những gì nghe từ láng giềng ở vòng trước (xác suất 0,5); (b) \emph{nhiễu} -- các câu từ đoạn gây nhiễu, số lượng tăng theo vòng ($3+t$ câu), mô phỏng hiện tượng lịch sử loãng dần mà paper mô tả. Nhãn vàng của từng câu được giữ lại. Với từng chiến lược, bộ chọn xử lý lịch sử của vòng cuối, sau đó đo chất lượng. Toàn bộ phần mô phỏng này là \emph{mô phỏng, không phải chạy LLM}: thông điệp được dựng từ câu văn bản thật của HotpotQA, nhưng hành vi ``suy luận'' của tác tử không phải của LLM.
+
+\textbf{Thí nghiệm 2} (tệp \texttt{src/exp2/}): đặc trưng ảnh là ảnh 64$\times$64 qua một CNN hai lớp conv; đặc trưng văn bản là bag-of-words băm 3000 chiều từ view hierarchy; embedding chung 256 chiều (thay cho 512 của paper). Kiến trúc DAIN hiện thực đúng Eq.~\ref{eq:dain-ctx}--\ref{eq:dain-update}: 8 tác tử (3 synergy, 2 uniqueness -- tương ứng 2 modality, 3 redundancy), gate top-$\tau$, đồ thị $\Phi$ sigmoid, nút cổ chai hạng thấp 32 chiều, consensus multi-head attention. Huấn luyện đúng thiết lập paper: Adam lr $10^{-4}$, batch 32, early stopping patience 10, tối đa 50 epoch, 5 seed (42, 123, 456, 789, 1024), $\alpha=0{,}1$, $\lambda_{act}=0{,}01$, $\lambda_{comm}=0{,}001$.
+
+Một chi tiết triển khai cần ghi rõ: Eq.~\ref{eq:dain-gate} của paper dùng Softmax rồi Top-$\tau$, nhưng khi đó tổng $\|g\|_1$ luôn bằng 1 nên số hạng $\lambda_{act}\|g\|_1$ trong Eq.~\ref{eq:dain-loss} trở thành hằng số vô nghĩa. Bản hiện thực dùng gate sigmoid với chọn top-$\tau$ theo logit, giữ nguyên tính chất kích hoạt thưa phụ thuộc ngữ cảnh và làm số hạng chính quy có tác dụng. Đây là khác biệt có chủ ý so với paper, nằm trong tệp \texttt{models.py} và được nêu ở phần chú thích của mã nguồn.
+
+\subsection{Chỉ số đánh giá}
+Thí nghiệm 1 dùng bốn chỉ số đo được trực tiếp trên ngữ cảnh được chọn: \emph{Evidence-P/R/F1} -- precision/recall/F1 của tập câu được chọn so với các câu vàng có trong lịch sử (đo ``lượng thông tin ngữ cảnh được giữ lại''); \emph{số từ} trong ngữ cảnh được chọn và trong toàn bộ lịch sử (chi phí ngữ cảnh); \emph{answer accuracy} -- tỷ lệ nhận đúng đáp án trong 8 ứng viên (1 đúng, 7 nhiễu) khi một bộ ghép từ vựng đơn giản chấm điểm ứng viên theo mức hỗ trợ trong ngữ cảnh được chọn; và \emph{thời gian chọn} ngữ cảnh. Chỉ số answer accuracy chỉ đo được việc ngữ cảnh có còn giữ bằng chứng ủng hộ đáp án đúng hay không, không đo năng lực suy luận -- đó là lý do nó chỉ là chỉ số phụ.
+
+Thí nghiệm 2 dùng: accuracy trên tập test (trung bình $\pm$ độ lệch chuẩn qua 5 seed), $\bar{\tau}$ -- số tác tử kích hoạt trung bình, $\bar{\rho}$ -- mật độ đồ thị giao tiếp trung bình, và quét $\tau \in \{1,2,4,6,8\}$ để so sánh định tính với Table~5 của paper.

@@ -1,0 +1,16 @@
+# Dữ liệu tải về (tái lập bằng `make data` — xem README)
+multi-agent-paper-study/experiments/data/
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# LaTeX build artifacts (giữ lại main.pdf là sản phẩm)
+*.xdv
+*.log
+*.aux
+*.bbl
+*.blg
+*.out
+*.run.xml

@@ -1,0 +1,83 @@
+{
+  "config": {
+    "data_file": "hotpot_dev_distractor_v1.json",
+    "encoder": "sentence-transformers/all-MiniLM-L6-v2",
+    "n_examples": 200,
+    "seed": 42,
+    "n_agents": 5,
+    "n_rounds": 3,
+    "edge_prob": 0.4,
+    "expert_frac": 0.4,
+    "base_noise": 3,
+    "echo_prob": 0.5,
+    "n_candidates": 8,
+    "lambda_s": 0.92,
+    "lambda_t": 0.92,
+    "theta": 0.65,
+    "sweep_rounds": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "sweep_agents": [
+      2,
+      4,
+      6,
+      8
+    ]
+  },
+  "note": "Số liệu do chương trình chạy thực tế sinh ra; mô phỏng lịch sử trao đổi, không chạy LLM.",
+  "main_config_summary": [
+    {
+      "n_rounds": 3,
+      "n_agents": 5,
+      "strategy": "full",
+      "evidence_precision": 0.1884835,
+      "evidence_recall": 1.0,
+      "evidence_f1": 0.31404449999999995,
+      "answer_correct": 0.975,
+      "selected_tokens": 2014.38,
+      "history_tokens": 2014.38,
+      "selection_time_ms": 0.00451
+    },
+    {
+      "n_rounds": 3,
+      "n_agents": 5,
+      "strategy": "radar",
+      "evidence_precision": 0.3529155,
+      "evidence_recall": 0.169315,
+      "evidence_f1": 0.2163195,
+      "answer_correct": 0.87,
+      "selected_tokens": 91.28,
+      "history_tokens": 2014.38,
+      "selection_time_ms": 0.04184
+    },
+    {
+      "n_rounds": 3,
+      "n_agents": 5,
+      "strategy": "semantic",
+      "evidence_precision": 0.368879,
+      "evidence_recall": 0.21978750000000002,
+      "evidence_f1": 0.260908,
+      "answer_correct": 0.87,
+      "selected_tokens": 122.465,
+      "history_tokens": 2014.38,
+      "selection_time_ms": 0.01583
+    },
+    {
+      "n_rounds": 3,
+      "n_agents": 5,
+      "strategy": "window",
+      "evidence_precision": 0.189434,
+      "evidence_recall": 0.3996515,
+      "evidence_f1": 0.25401399999999996,
+      "answer_correct": 0.975,
+      "selected_tokens": 811.57,
+      "history_tokens": 2014.38,
+      "selection_time_ms": 0.008315
+    }
+  ]
+}

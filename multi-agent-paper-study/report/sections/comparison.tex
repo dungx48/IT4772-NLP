@@ -1,0 +1,47 @@
+\section{So sánh và thảo luận}\label{sec:comparison}
+
+\begin{table*}[t]
+\centering
+\caption{So sánh tổng quan hai công trình. Số liệu hiệu năng lấy từ paper gốc của từng phương pháp; hai phương pháp không đánh giá trên cùng bộ dữ liệu nên không so điểm trực tiếp.}
+\label{tab:compare}
+\begin{tabular}{p{0.20\textwidth} p{0.35\textwidth} p{0.35\textwidth}}
+\toprule
+\textbf{Tiêu chí} & \textbf{Agent-Radar}~\cite{agentradar2026} & \textbf{DAIN}~\cite{dain2026} \\
+\midrule
+Mục tiêu & Cải thiện cách tác tử LLM tận dụng lịch sử trao đổi dài & Cải thiện hợp nhất đa phương thức cho suy luận cộng tác \\
+Loại bài toán & Quản lý ngữ cảnh lúc suy luận trong MAS & Fusion đa phương thức học được (phân loại, hồi quy) \\
+Kiến trúc & Lớp phủ chọn ngữ cảnh + lái attention trên MAS có sẵn & Mạng nơ-ron hoàn chỉnh: Meta-Controller, pool 8 tác tử, đồ thị giao tiếp, consensus fusion \\
+Cơ chế giao tiếp & Không đổi cách tác tử giao tiếp; thay đổi cách một tác tử đọc lại lịch sử & Trao đổi nén qua nút cổ chai $B(h;\phi)=\phi W_B h$, đồ thị $\Phi$ theo từng mẫu \\
+Cách chọn & Chọn \emph{câu}: cosine ngữ nghĩa $\times$ suy giảm không gian (hop) $\times$ thời gian (tuổi), ngưỡng $\theta$ & Chọn \emph{tác tử}: top-$\tau$ gate theo ngữ cảnh; chọn \emph{luồng thông tin}: $\Phi=\sigma(G_{comm}(e_c))$ \\
+Yêu cầu huấn luyện & Training-free (chỉ cần sentence encoder có sẵn) & Huấn luyện từ đầu, loss đa mục tiêu (Eq.~\ref{eq:dain-loss}) \\
+Chi phí & $+23\%$ thời gian mỗi nhiệm vụ; lịch sử đầy đủ vẫn nằm trong prompt & 12,8M tham số tổng, 5,8M dùng mỗi lượt nhờ kích hoạt thưa \\
+Bộ dữ liệu đánh giá & HotpotQA, 2Wiki, MuSiQue, MATH-500, MMLU-Pro (văn bản) & ADNI, MIMIC-IV, MM-IMDB, CMU-MOSI, ENRICO (đa phương thức) \\
+Ưu điểm & Không mất thông tin, cắm được vào nhiều khung MAS, không cần huấn luyện & Tiết kiệm tính toán theo mẫu, diễn giải được qua mô hình kích hoạt \\
+Giới hạn & Cần backend can thiệp attention (SPA/PASTA) chỉ chạy với LLM cục bộ; chỉnh tay $\lambda_s,\lambda_t,\theta$ & Phân bổ nhóm tác tử thủ công; mới cho phân loại/hồi quy; cần huấn luyện từ đầu \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+Bảng~\ref{tab:compare} đối chiếu hai công trình theo từng tiêu chí. Phần dưới phân tích những điểm giống, khác và những gì rút ra được khi đọc cả hai.
+
+\subsection{Điểm tương đồng}
+Hai paper phản ứng với cùng một vấn đề chung: khi số thành phần tham gia cộng tác tăng lên -- nhiều tác tử, nhiều vòng, nhiều modality -- việc để mọi thành phần truy cập hoặc xử lý \emph{mọi thứ} vừa tốn kém vừa làm giảm chất lượng. Agent-Radar cắt gọn vấn đề ở mức thông tin: không phải câu nào trong lịch sử cũng xứng đáng nhận attention như nhau. DAIN cắt gọn ở mức thành phần: không phải tác tử nào cũng cần chạy cho mọi mẫu. Hai hướng chạm nhau ở một nguyên tắc: \emph{lựa chọn phụ thuộc ngữ cảnh} -- Agent-Radar tính điểm cho từng câu theo truy vấn hiện tại, DAIN tính gate cho từng tác tử theo vector ngữ cảnh của từng mẫu -- thay vì dùng chính sách tĩnh áp cho mọi tình huống.
+
+Nguyên tắc thứ hai cả hai cùng dùng là \emph{khoảng cách cấu trúc là tín hiệu hữu ích}. Agent-Radar đo khoảng cách hop trên đồ thị giao tiếp và suy giảm trọng số theo nó; DAIN học luôn đồ thị giao tiếp $\Phi$. Trong cả hai paper, bỏ yếu tố cấu trúc này đều làm kết quả xấu đi rõ rệt: bỏ suy giảm không gian làm MuSiQue giảm từ 39,72 xuống 28,41 trong Agent-Radar; bỏ trao đổi giữa các tác tử làm ADNI giảm từ 73,5 xuống 72,1 trong DAIN (số liệu tác giả).
+
+Thứ ba, cả hai đều tránh cắt cụt mù. Agent-Radar giữ nguyên toàn bộ lịch sử và chỉ lái attention; DAIN nén thông điệp qua nút cổ chai với độ mạnh tỷ lệ độ mạnh kết nối, thay vì chặn hẳn tin nhắn.
+
+\subsection{Khác biệt quan trọng}
+Khác biệt đầu tiên nằm ở tầng hoạt động. Agent-Radar là kỹ thuật lúc suy luận cho một hệ đã có: không có tham số cần huấn luyện, không đổi gì cấu trúc. DAIN là một kiến trúc học từ đầu: mọi cơ chế của nó -- gate, đồ thị giao tiếp, cách hợp nhất -- được hình thành trong huấn luyện. Vì thế không thể nói phương pháp nào ``tốt hơn'' bằng cách so điểm: chúng chạy trên loại dữ liệu khác nhau, loại tác vụ khác nhau và không chia sẻ baseline nào.
+
+Khác biệt thứ hai là ý nghĩa của từ ``động''. Trong Agent-Radar, động là việc ngữ cảnh được chọn lại ở \emph{mỗi bước sinh của từng tác tử}. Trong DAIN, động là việc nhóm tác tử và đồ thị giao tiếp được tính lại cho \emph{mỗi mẫu}. Độ mịn của lựa chọn khác nhau: một bên chọn câu, một bên chọn thành phần mô hình.
+
+Khác biệt thứ ba là hướng tối ưu tài nguyên, và hai phương pháp đi ngược chiều nhau. Agent-Radar \emph{tăng} chi phí suy luận khoảng 23\% để đổi lấy chất lượng, vì toàn bộ lịch sử vẫn nằm trong prompt và còn thêm phần chấm điểm câu. DAIN \emph{giảm} chi phí vì thành phần không được chọn thì không chạy (5,8M trên 12,8M tham số hiệu dụng). Ai muốn chọn một trong hai hướng nên bắt đầu từ câu hỏi: bài toán đang thiếu chất lượng hay đang thiếu tài nguyên.
+
+Một điểm cần nói thẳng: Agent-Radar phụ thuộc khả năng can thiệp vào attention bên trong LLM (SPA, PASTA). Với các LLM chỉ gọi qua API, lớp kỹ thuật này không áp dụng được; đây là ràng buộc thực dụng mà paper xử lý bằng các mô hình cục bộ.
+
+\subsection{Bài học thiết kế chung}
+Đọc cả hai công trình, có thể rút ra vài nguyên tắc có vẻ lặp lại được ở các hệ khác. Thứ nhất, lựa chọn nên được tính từ đặc điểm tình huống (truy vấn, mẫu đầu vào) chứ không cố định trước. Thứ hai, cấu trúc liên kết giữa các thành phần -- kể cả khi nó đơn giản như số hop trên đồ thị -- mang thông tin về độ tin cậy của thông tin và nên được đưa vào quyết định chọn lọc. Thứ ba, cơ chế nén có kiểm soát (giữ nguyên bản gốc và lái sự chú ý, hoặc nén theo độ mạnh kết nối) giảm rủi ro mất thông tin so với việc xóa trực tiếp. Cuối cùng, mỗi cơ chế chọn lọc cần một ``van điều tiết'' chi phí -- ngưỡng $\theta$ ở Agent-Radar, các số hạng chính quy $\|g\|_1$ và $\|\Phi\|_F^2$ ở DAIN -- để cân bằng giữa độ phủ và chi phí.
+
+\subsection{Khả năng kết hợp (giả thuyết, chưa được kiểm chứng)}
+Về nguyên tắc có thể hình dung một hệ mà DAIN điều phối các tác tử LLM (chọn ai chạy cho mỗi nhiệm vụ) và Agent-Radar quản lý ngữ cảnh mà mỗi tác tử đọc lại giữa các vòng (chọn đọc gì). Đây chỉ là suy nghĩ thiết kế của người viết báo cáo: hai paper không thử nghiệm kết hợp này, hai cơ chế nằm ở tầng khác nhau, và việc chúng bù hay chéo nhau là câu hỏi mở cần thí nghiệm riêng.

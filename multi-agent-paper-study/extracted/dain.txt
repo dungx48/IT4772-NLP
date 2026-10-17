@@ -1,0 +1,1211 @@
+
+===== PAGE 1 =====
+DAIN: Dynamic Agent-Based Interaction Network for
+Efficient and Collaborative Multimodal Reasoning
+Xinxin Chen
+Yuchen Li
+Zihan Wang
+Haoyu Zhang
+Ruixin Liu
+Mingyuan Zhao
+University of Chinese Academy of Sciences
+Abstract
+Current multimodal fusion approaches, particularly those based on static Mixture-
+of-Experts (MoE) architectures, often struggle to provide the adaptive and efficient
+collaborative reasoning required by complex real-world applications. We introduce
+the Dynamic Agent-based Interaction Network (DAIN), which reconceptualizes
+multimodal fusion as a dynamic, multi-agent collaborative process. DAIN employs
+a context-aware Meta-Controller that dynamically schedules sparse activation of
+specialized interaction agents and orchestrates compressed inter-agent commu-
+nication for consensus-building. The framework is guided by a multi-objective
+loss function that jointly optimizes task accuracy, agent specialization, and op-
+erational efficiency through sparse activation and communication regularization.
+Comprehensive evaluations across five diverse benchmarks—ADNI, MIMIC-IV,
+MM-IMDB, CMU-MOSI, and ENRICO—establish DAIN as a new state-of-the-art,
+delivering significant performance improvements including a 2.6% accuracy gain
+on ADNI. Ablation studies verify the critical roles of both dynamic scheduling
+and agent communication. Furthermore, DAIN offers enhanced interpretability
+by exposing context-dependent agent roles and collaboration patterns while main-
+taining computational efficiency through sample-wise sparse agent activation. Our
+work demonstrates the promise of dynamic, agent-based paradigms for multimodal
+reasoning.
+1
+Introduction
+Effective integration of complementary information from distinct data sources—such as images, text,
+and audio—remains a fundamental challenge in multimodal machine learning. This integration is
+particularly critical in domains like healthcare, where accurate diagnostics often depend on synthesiz-
+ing heterogeneous data streams including medical imaging, clinical notes, and laboratory results. The
+Partial Information Decomposition (PID) framework [34] provides a principled theoretical lens for
+analyzing multimodal interactions, decomposing information into uniqueness (modality-specific con-
+tributions), redundancy (shared information), and synergy (emergent properties from combination).
+While PID establishes a strong theoretical foundation, its integration into practical end-to-end deep
+learning models remains underexplored, as existing fusion methods largely lack explicit mechanisms
+to model these distinct interaction types.
+Mixture-of-Experts (MoE) architectures [25, 28] offer a promising direction by allocating specialized
+parameters to different interaction patterns through conditional computation. Recent advances have
+scaled MoE to unprecedented capacities [48, 14], and several works have adapted this paradigm
+for multimodal tasks [43, 36, 77]. However, conventional MoE frameworks operate with static,
+predefined collaboration structures that lack dynamic adaptation and resource-efficient coordination.
+They aggregate expert outputs without mechanisms to dynamically assemble the most relevant experts
+or facilitate focused, context-aware information exchange among them.
+Preprint.
+arXiv:2606.30189v1  [cs.CL]  29 Jun 2026
+
+===== PAGE 2 =====
+Figure 1: Motivation. Static dense multimodal fusion is costly and ignores diverse cross-modal
+interaction patterns; DAIN models synergy, uniqueness, and redundancy via dynamic, sparse agent
+collaboration for efficient and robust reasoning.
+To address these limitations, we introduce a paradigm shift: we conceptualize multimodal fusion
+as a collaborative decision-making process among autonomous interaction agents. We propose the
+Dynamic Agent-based Interaction Network (DAIN), which introduces three key innovations. First,
+DAIN employs a Meta-Controller that performs context-aware, sparse scheduling of agents, activating
+only a relevant subset for each input sample. Second, the framework enables structured, compressed
+inter-agent communication guided by a dynamic graph to efficiently build consensus among active
+agents. Third, DAIN uses a multi-objective optimization formulation that balances task performance
+with operational efficiency, promoting sparsity in both agent activation and communication pathways.
+This dynamic, agent-based framework is backbone-agnostic and provides structured interpretability
+through agent activation profiles and communication graphs. Extensive experiments on five diverse
+multimodal datasets—including two medical benchmarks (ADNI, MIMIC-IV) and three general-
+purpose benchmarks (MM-IMDB, CMU-MOSI, ENRICO)—demonstrate that DAIN consistently
+outperforms strong static fusion baselines and prior interaction-aware models (Figure 3). Ablation
+studies confirm the necessity of both dynamic scheduling and agent communication, while analysis
+of agent activation patterns reveals interpretable insights about how different interaction types are
+dynamically recruited for distinct data characteristics.
+2
+Related Work
+2.1
+Multimodal Interaction Theory
+The theoretical study of multimodal interactions has been substantially advanced by the Partial
+Information Decomposition (PID) framework [34], which decomposes information content into
+uniqueness, redundancy, and synergy components. However, translating these theoretical constructs
+into end-to-end learning systems remains challenging. Several approaches have attempted to model
+specific interaction types [83, 29], but these are often limited to particular modality combinations or
+require separate estimation procedures. Other works focus on interaction quantification [71, 39, 12]
+but do not provide mechanisms for learning these interactions within unified architectures. Bimodal
+approaches [72, 13] cannot readily extend to settings with more than two modalities. Our work
+addresses these gaps by proposing a unified framework that directly models and quantifies diverse
+interaction types within an end-to-end Mixture-of-Experts architecture.
+2
+
+===== PAGE 3 =====
+Figure 2: DAIN architecture. Encoded multimodal features form a context vector for a meta-
+controller that sparsely schedules interaction agents; active agents exchange compressed messages
+and are aggregated by an attention-based consensus module to produce the final prediction.
+2.2
+Multimodal Fusion Architectures
+Multimodal fusion strategies have evolved from simple concatenation of modality representations
+[38] to sophisticated attention-based mechanisms [58, 74, 26]. The Mixture-of-Experts paradigm
+[25, 28, 78, 7] enables conditional computation where specialized parameters are activated based
+on input characteristics. Modern large-scale implementations [48, 14, 81] have demonstrated the
+scalability of sparse expert activation. Recent adaptations for multimodal learning include LIMoE
+[43], which applies MoE to vision-language contrastive learning, MoE-LLaVA [36], which integrates
+MoE into large vision-language models, and comprehensive surveys on multimodal LLMs [33].
+The MMoE framework [77] explicitly models different interaction types using specialized experts,
+though it treats interaction modeling as a separate preprocessing stage rather than an integrated end-
+to-end learning component. Our DAIN framework advances beyond these approaches by introducing
+dynamic, context-aware expert scheduling and structured inter-agent communication.[82, 6, 5, 76,
+84, 9, 11, 10, 84, 23]
+2.3
+Multimodal Interpretability
+Interpretability in multimodal systems aims to explain model decisions and quantify the contribution
+of different modalities and their interactions. Prior approaches have focused on attention visualization
+[4, 3] or individual modality attribution [24, 21, 50]. Some methods generate human-readable
+rationales [45, 80, 8] but do not quantify the relative contribution of interaction types. Others lack
+structured taxonomies for categorizing interactions [57, 35, 70]. DAIN addresses these limitations
+by providing interpretability through explicit agent activation profiles and communication graphs,
+enabling both local (per-sample) and global (dataset-level) analysis of interaction dynamics.[20, 69,
+32, 47]
+3
+Method
+3.1
+Problem Formulation and Notation
+Consider a multimodal input consisting of n modalities M = {m1, m2, . . . , mn}, where each
+modality mi is processed by an encoder Ei to produce embedding ei [75]. The set of embeddings
+is denoted L = {e1, . . . , en}. We define a pool of K interaction agents A = {A1, A2, . . . , AK},
+where each agent Ak is specialized to model a particular type of multimodal interaction (e.g., synergy
+between modalities, unique information from a single modality, or redundant information shared
+across modalities).[56, 37, 54, 16, 86, 87, 59, 51, 49, 40, 85, 53, 52, 46, 17, 55, 19, 22, 61, 60, 18,
+41, 15]
+3
+
+===== PAGE 4 =====
+Definition 1 (Dynamic Agent-based Fusion). Given multimodal embeddings L, dynamic agent-based
+fusion produces a prediction ˆy through context-aware agent scheduling, gated execution with inter-
+agent communication, and consensus fusion, parameterized by the Meta-Controller G and Consensus
+module C.
+3.2
+DAIN Architecture
+The DAIN framework operates in three sequential stages: Context Analysis & Agent Scheduling,
+Gated Execution & Compressed Communication, and Consensus Fusion. The pool of K agents is
+organized into three functional categories based on the PID framework: Synergy agents that capture
+emergent cross-modal interactions, Uniqueness agents that extract modality-specific information,
+and Redundancy agents that model shared information across modalities. In our implementation
+with K = 8, we allocate 3 synergy agents, 3 uniqueness agents (one per primary modality), and 2
+redundancy agents. This allocation is flexible and can be adjusted based on task requirements.
+3.2.1
+Context Analysis and Dynamic Agent Scheduling
+The Meta-Controller G first computes a context vector ec by aggregating the modality embeddings
+through a lightweight pooling operation, such as concatenation followed by linear projection:
+ec = Wc[e1; e2; . . . ; en] + bc,
+(1)
+where [·; ·] denotes concatenation, and Wc, bc are learnable parameters.
+Based on ec, the Meta-Controller generates a sparse activation vector g ∈RK for the agent pool:
+g = Topτ(Softmax(Ggate(ec))),
+(2)
+where Ggate is a learned sub-network and Topτ(·) is a differentiable sparsification function (e.g.,
+sparsemax [42]) that retains only the top-τ agents with non-zero gates. An agent Ak is executed if
+and only if gk > 0.
+Simultaneously, the Meta-Controller infers a soft communication graph Φ ∈RK×K that governs
+inter-agent information flow:
+Φ = σ(Gcomm(ec)),
+(3)
+where σ is the sigmoid function and Φij indicates the communication strength from agent Aj to Ai.
+This communication graph is context-dependent, enabling flexible collaboration patterns that adapt to
+input characteristics.
+From a structural systems perspective, the effectiveness and robustness of collaborative reasoning
+critically depend on the underlying communication topology. Extensive studies on the diagnosability
+of interconnection networks demonstrate that appropriate connectivity and neighborhood structures
+enable reliable information propagation and fault localization in distributed systems [68, 64]. In
+particular, the concept of g-good-neighbor diagnosability highlights how local redundancy and
+constrained neighborhood interactions can significantly enhance system-level robustness under com-
+ponent failures or unreliable communications [73]. These results provide theoretical motivation
+for learning a structured, context-dependent inter-agent communication graph in DAIN, where con-
+trolled connectivity and sparse yet reliable message passing support stable and effective collaborative
+reasoning.
+From a structural-systems perspective, the effectiveness of information propagation and robust con-
+sensus often depends on the underlying connectivity and diagnosability properties of the interaction
+topology. Classical results on global reliable diagnosis and g-good-neighbor diagnosability highlight
+how structured communication patterns enable reliable fault localization and system-level robustness,
+which conceptually aligns with our goal of learning a context-dependent inter-agent communication
+graph for collaborative reasoning [66, 73, 65, 67].
+3.2.2
+Gated Execution and Compressed Communication
+Each activated agent (gk > 0) first processes the multimodal context to produce an initial state:
+h(0)
+k
+= fk(ec; θk),
+for k where gk > 0,
+(4)
+where fk is the agent-specific processing function with parameters θk.
+4
+
+===== PAGE 5 =====
+Agents then engage in structured communication to refine their states. For receiving agent Ai,
+messages from other agents Aj are compressed and aggregated:
+mi←j = B(h(0)
+j ; ϕij),
+ϕij = Φij · I(gj > 0),
+(5)
+where B(·; ϕij) is a communication bottleneck that outputs compressed messages with complexity
+modulated by the connection strength ϕij. Strong connections (ϕij ≈1) permit richer information
+transfer, while weak connections convey minimal information. A simple instantiation is B(h; ϕ) =
+ϕ · (WBh), where WB is a low-rank projection matrix.
+Agent Ai updates its state by integrating incoming messages:
+h(1)
+i
+= LayerNorm
+
+h(0)
+i
++ ReLU
+
+Wu
+X
+j̸=i
+mi←j
+
+
+
+.
+(6)
+3.2.3
+Consensus Fusion
+The final prediction synthesizes the post-communication states of all activated agents through the
+Consensus Fusion module:
+ˆy = C
+
+{h(1)
+k
+| gk > 0}
+
+,
+(7)
+where C is implemented as a multi-head attention module that learns to weight each agent’s contribu-
+tion based on its refined state.
+3.3
+Learning Objectives
+DAIN is trained with a composite objective that promotes task performance, agent specialization, and
+operational efficiency.
+Task Loss. The primary loss is the standard cross-entropy for classification or mean squared error for
+regression tasks:
+Ltask = L(ˆy, y).
+(8)
+Specialization Loss. To encourage distinct agent expertise, we employ a perturbation-based strategy.
+For each agent, we compute its output sensitivity to different modality configurations:
+Lspec = 1
+K
+K
+X
+k=1
+X
+m∈P
+D
+
+Ak(ec), Ak(e(m)
+c
+)
+
+,
+(9)
+where P is a set of perturbation schemes (e.g., masking individual modalities), and D measures the
+divergence in agent outputs.
+More broadly, a recurring theme in discrete structures is that a small set of constraints or sufficient
+structural conditions can enforce strong global properties (e.g., forcing phenomena in polyominoes
+and maximal restricted edge-connectivity in graphs). This structural viewpoint is consistent with
+classical results showing that carefully designed local constraints can induce strong global properties
+in complex networks, such as maximal restricted edge-connectivity and robustness guarantees under
+sparse conditions [62, 63]. Similar principles have also been observed in graph-based learning sys-
+tems, where structured message passing and self-supervised objectives enable efficient and scalable
+reasoning over large combinatorial spaces [44]. Moreover, real-world scientific applications often
+require integrating heterogeneous observations under limited and noisy structural constraints, as ex-
+emplified by multimodal geophysical inference from seismic, imaging, and prior information sources
+[31]. These insights collectively support DAIN’s multi-objective design, where sparse activation and
+constrained communication act as inductive biases to promote expressive yet controllable multimodal
+reasoning.
+Efficiency Regularization. We regularize both activation and communication costs:
+Reff = λact∥g∥1 + λcomm∥Φ∥2
+F,
+(10)
+where the L1-norm on g promotes sparse activation and the Frobenius norm on Φ discourages dense
+communication.
+5
+
+===== PAGE 6 =====
+Algorithm 1 DAIN Forward Pass
+Require: Modality inputs M = {m1, . . . , mn}, agents A = {A1, . . . , AK}
+Ensure: Prediction ˆy
+1: // Stage 1: Encode and Context Analysis
+2: for i = 1 to n do
+3:
+ei ←Ei(mi)
+▷Modality encoding
+4: end for
+5: ec ←Wc[e1; . . . ; en] + bc
+▷Context vector
+6: // Stage 2: Dynamic Agent Scheduling
+7: g ←Topτ(Softmax(Ggate(ec)))
+▷Sparse gates
+8: Φ ←σ(Gcomm(ec))
+▷Comm. graph
+9: Aactive ←{Ak : gk > 0}
+▷Active agents
+10: // Stage 3: Gated Execution & Communication
+11: for Ak ∈Aactive do
+12:
+h(0)
+k
+←fk(ec; θk)
+▷Agent processing
+13: end for
+14: for Ai ∈Aactive do
+15:
+mi ←P
+j̸=i Φij · gj · WBh(0)
+j
+▷Message aggregation
+16:
+h(1)
+i
+←LN(h(0)
+i
++ ReLU(Wumi))
+▷State update
+17: end for
+18: // Stage 4: Consensus Fusion
+19: ˆy ←C({h(1)
+k
+: Ak ∈Aactive})
+▷Multi-head attn.
+20: return ˆy
+Complete Objective. The model is trained end-to-end by minimizing:
+Ltotal = Ltask + αLspec + Reff,
+(11)
+where α balances task performance against specialization.
+Algorithm Summary. Algorithm 1 provides pseudocode for DAIN’s forward pass, illustrating the
+sequential stages of context analysis, sparse agent scheduling, compressed communication, and
+consensus fusion.
+3.4
+Theoretical Analysis
+Theorem 1 (Convergence Guarantee). Under standard assumptions of bounded gradients and
+Lipschitz-continuous loss functions, DAIN with sparse agent activation converges to a stationary
+point at rate O(1/
+√
+T), where T is the number of training iterations.
+Proof Sketch. The proof follows from analyzing the variance introduced by sparse agent selection.
+Since the Meta-Controller learns a smooth gating function, the expected gradient direction is unbiased.
+The sparsity regularization ensures bounded activation, limiting gradient variance. Standard SGD
+convergence results then apply.
+Proposition 2 (Computational Efficiency). For a pool of K agents with average activation of ¯τ
+agents per sample, DAIN achieves computational cost O(¯τ · Cagent + ¯τ 2 · Ccomm), where Cagent and
+Ccomm are per-agent processing and communication costs. When ¯τ ≪K, this provides significant
+savings over full-activation baselines.
+4
+Experiments
+4.1
+Datasets and Setup
+We evaluate DAIN on five diverse multimodal benchmarks spanning medical and general-purpose
+domains. ADNI [1] is the Alzheimer’s Disease Neuroimaging Initiative dataset containing MRI scans,
+PET imaging, genetic markers, and cognitive assessments for Alzheimer’s diagnosis. MIMIC-IV
+6
+
+===== PAGE 7 =====
+ADNI
+MIMIC-IV
+MM-IMDB
+MOSI
+ENRICO
+0.6
+0.7
+0.8
+0.9
+1.0
+Normalized Performance Across Benchmarks
+DAIN (Ours)
+Best Baseline
+Figure 3: Normalized performance comparison across all five benchmarks. DAIN (blue) consistently
+outperforms the best baseline (gray) on all datasets, with varying margins of improvement reflecting
+task-specific characteristics.
+[27] provides ICU patient records including clinical notes, vital signs, and laboratory results for
+mortality prediction. MM-IMDB [2] contains movie posters and plot summaries for multi-label genre
+classification. CMU-MOSI [79] includes video, audio, and text for sentiment intensity prediction.
+ENRICO [30] provides mobile UI screenshots and metadata for design topic classification.
+For all experiments, we use modality-specific encoders (ResNet-50 for images, BERT-base for text,
+transformer encoders for sequential data) with DAIN configured with K = 8 agents. We follow
+standard dataset splits: for ADNI, we use the official train/val/test split (60%/20%/20%); for MIMIC-
+IV, MM-IMDB, MOSI, and ENRICO, we use established benchmark splits from prior work. All
+experiments are repeated 5 times with different random seeds (42, 123, 456, 789, 1024), and we report
+mean ± standard deviation. Statistical significance is assessed using paired t-tests with Bonferroni
+correction.
+We train with Adam optimizer (β1 = 0.9, β2 = 0.999) using learning rate 1 × 10−4, batch size
+32, and early stopping (patience=10) based on validation performance. Hyperparameters α = 0.1,
+λact = 0.01, λcomm = 0.001 are selected via grid search on the validation set. All experiments are
+conducted on a single NVIDIA A100 GPU (40GB). Training converges within 50 epochs for all
+datasets, requiring approximately 2-6 hours depending on dataset size.
+Baseline Implementation. For fair comparison, all baselines use identical backbone encoders and
+embedding dimensions (512). We implement Early Fusion and Late Fusion following standard
+practices. For MoE variants, we use the same number of experts (K = 8) as DAIN agents. MMoE
+is implemented following the original paper with recommended hyperparameters. All methods are
+trained with the same optimization protocol.
+7
+
+===== PAGE 8 =====
+Table 1: Main results across all datasets. DAIN consistently outperforms all baselines. Accuracy
+(%) is reported for classification tasks and MSE for regression (MOSI). Improvements over the best
+baseline are shown in parentheses. Statistical significance: ∗∗∗p < 0.001.
+Method
+ADNI
+MIMIC-IV
+MM-IMDB
+MOSI (MSE)
+ENRICO
+Early Fusion (Concat.)
+69.4
+82.7
+48.5
+2.49
+78.0
+Late Fusion (Attn.)
+70.9
+81.9
+48.7
+2.50
+78.4
+MoE [25]
+69.8
+82.3
+49.0
+2.53
+78.9
+Sparse MoE [48]
+68.9
+82.3
+49.8
+2.52
+78.7
+MMoE [77]
+70.2
+82.5
+49.6
+2.48
+79.1
+DAIN (Ours)
+73.5∗∗∗
+84.2∗∗∗
+51.7∗∗∗
+2.41∗∗∗
+80.4∗∗∗
+(+2.6)
+(+1.7)
+(+2.1)
+(-0.07)
+(+1.3)
+Table 2: Parameter count comparison (millions). Effective params indicate average parameters used
+per forward pass due to sparse activation.
+Method
+Total Params
+Effective Params
+Early Fusion
+8.2M
+8.2M
+Late Fusion
+8.5M
+8.5M
+MoE (K=8)
+12.4M
+12.4M
+Sparse MoE
+12.4M
+6.2M
+MMoE
+12.8M
+12.8M
+DAIN (Ours)
+12.8M
+5.8M
+- Backbone
+8.2M
+8.2M
+- Agents (K=8)
+4.2M
+1.7M
+- Meta-Controller
+0.26M
+0.26M
+- Communication
+0.13M
+0.05M
+4.2
+Main Results
+Table 1 presents the main performance comparison. DAIN consistently achieves the best performance
+across all five datasets, with statistically significant improvements (p < 0.001). The largest gain
+of 2.6% accuracy occurs on ADNI, a clinically complex dataset requiring integration of imaging,
+genetic, and cognitive data. On MOSI, DAIN reduces MSE by 0.08, demonstrating improved senti-
+ment intensity prediction. These results confirm that dynamic, collaborative agent-based reasoning
+outperforms static mixture-of-expert architectures.
+Parameter Count Comparison. Table 2 provides a detailed breakdown of model parameters to
+ensure fair comparison. DAIN introduces modest overhead (Meta-Controller: 0.26M; Communica-
+tion: 0.13M) over standard MoE, resulting in comparable total parameters. Critically, due to sparse
+activation, DAIN’s effective parameters per forward pass are significantly lower (5.8M vs 12.4M for
+full MoE), explaining both the efficiency gains and improved generalization.
+4.3
+Efficiency Analysis
+Table 3 reveals that DAIN dynamically activates only a subset of agents per sample (e.g., 3.2 out of 8
+on ADNI) while maintaining sparse communication graphs. This confirms that the Meta-Controller
+successfully identifies and recruits only the necessary interaction patterns for each input, contributing
+to both performance and computational efficiency.
+4.4
+Ablation Study
+Table 4 validates the contribution of DAIN’s core components. DAIN-Static (all agents always
+active) suffers a 1.7% drop on ADNI, confirming the benefit of context-aware agent selection. DAIN-
+NoComm (no inter-agent communication) also degrades by 1.4%, demonstrating the importance
+of collaborative information exchange. The full DAIN model significantly outperforms the Static
+8
+
+===== PAGE 9 =====
+Table 3: Detailed performance with efficiency metrics. ¯τ denotes average activated agents (out of
+K=8); ¯ρ denotes average communication graph density.
+Dataset
+Perf.
+Gain
+¯τ
+¯ρ
+ADNI
+73.5%
++2.6%
+3.2
+0.19
+MIMIC-IV
+84.2%
++1.5%
+4.1
+0.31
+MM-IMDB
+51.7%
++1.9%
+5.5
+0.42
+MOSI
+2.41
+-0.08
+4.8
+0.38
+ENRICO
+80.4%
++1.5%
+3.5
+0.25
+Table 4: Ablation study validating the contribution of dynamic scheduling and inter-agent communi-
+cation.
+Variant
+ADNI
+MM-IMDB
+Static MoE (K=8)
+70.1 (-3.4)
+49.5 (-2.2)
+DAIN-Static
+71.8 (-1.7)
+50.6 (-1.1)
+DAIN-NoComm
+72.1 (-1.4)
+50.9 (-0.8)
+DAIN (Full)
+73.5
+51.7
+MoE baseline by 3.4% on ADNI, confirming the superiority of the dynamic agent-based paradigm.
+Figure 4 visualizes these results with error bars from 5 independent runs.
+4.5
+Efficiency-Accuracy Trade-off
+Table 5 analyzes the efficiency-accuracy trade-off by varying the maximum allowed active agents
+τ. Performance peaks at τ = 4 for both datasets, using approximately half the agent pool. Further
+increasing τ provides no benefit and can slightly degrade performance due to noise from irrelevant
+agents. This validates that DAIN’s dynamic scheduling effectively identifies a performant yet efficient
+subset of interactions. Figure 5 visualizes this trade-off with the optimal operating point highlighted.
+Figure 6 provides further analysis of the relationship between agent activation and communication
+density across datasets, revealing that DAIN adaptively adjusts both metrics based on task complexity.
+4.6
+Hyperparameter Sensitivity
+Table 6 presents a systematic sensitivity analysis of DAIN’s key hyperparameters. DAIN demonstrates
+robust performance across a reasonable range of values, with accuracy varying by at most 1.4% (for
+K=4). The specialization weight α shows the broadest stable region, while excessive activation
+regularization (λact=0.05) causes notable degradation by over-constraining agent selection. Increasing
+agents beyond K=8 provides diminishing returns, suggesting that 8 agents adequately capture the
+interaction space. These results indicate that DAIN is not highly sensitive to hyperparameter tuning,
+and the default configuration generalizes well across datasets.
+4.7
+Interpretability Analysis
+Table 7 presents agent activation patterns across data subgroups, revealing interpretable specialization.
+On ADNI, cognitively normal (CN) patients primarily activate uniqueness agents (0.51), relying
+on modality-specific biomarkers. In contrast, MCI and Dementia patients show higher synergy
+activation (0.41 and 0.38), indicating that diagnosing cognitive impairment requires integrating
+complex multimodal interactions. On MM-IMDB, Animation and Biography genres strongly activate
+uniqueness agents (0.65 and 0.60), reflecting their reliance on distinctive visual or textual features.
+Thriller, which combines visual tension with narrative suspense, heavily utilizes synergy agents (0.55).
+These patterns align with domain intuitions and demonstrate DAIN’s interpretable, context-dependent
+reasoning. Figure 7 provides a comprehensive visualization of these activation patterns.
+9
+
+===== PAGE 10 =====
+Static MoE
+DAIN-Static
+DAIN-NoComm
+Full DAIN
+68
+69
+70
+71
+72
+73
+74
+75
+Accuracy (%)
+ADNI Dataset
+Static MoE
+DAIN-Static
+DAIN-NoComm
+Full DAIN
+48
+49
+50
+51
+52
+53
+Accuracy (%)
+MM-IMDB Dataset
+Figure 4: Ablation study results on ADNI and MM-IMDB datasets. Error bars represent standard
+deviation across 5 runs. The full DAIN model (rightmost) consistently achieves the best performance,
+validating the contribution of both dynamic scheduling and inter-agent communication.
+Table 5: Impact of maximum active agents τ on performance and efficiency.
+MIMIC-IV
+MOSI
+τ
+Acc
+¯#agents
+MSE
+¯#agents
+1
+82.1
+1.0
+2.58
+1.0
+2
+83.3
+1.8
+2.49
+1.9
+4
+84.2
+3.4
+2.41
+3.7
+6
+84.0
+5.1
+2.42
+5.2
+8
+83.9
+8.0
+2.43
+8.0
+4.8
+Training Dynamics
+Figure 8 illustrates the training convergence of DAIN compared to ablated variants. The full DAIN
+model achieves faster convergence and lower final loss, demonstrating that dynamic scheduling and
+inter-agent communication contribute to more efficient optimization.
+5
+Discussion and Limitations
+While DAIN demonstrates strong empirical performance, several limitations warrant discussion.
+First, the current agent allocation (3 synergy, 3 uniqueness, 2 redundancy) is manually specified;
+future work could explore learned or adaptive allocation strategies. Second, although DAIN achieves
+computational savings through sparse activation, the Meta-Controller introduces additional overhead
+that may be significant for very lightweight base models. Third, our evaluation focuses on classifi-
+cation and regression tasks; extending DAIN to generative multimodal tasks remains unexplored.
+Finally, the interpretability provided by agent activation patterns, while useful, does not constitute
+formal explanations and should be complemented with post-hoc analysis methods for high-stakes
+applications.
+6
+Conclusion
+We introduced DAIN, a Dynamic Agent-based Interaction Network that reconceptualizes multimodal
+fusion as collaborative reasoning among specialized interaction agents. Through context-aware
+sparse activation, compressed inter-agent communication, and multi-objective optimization, DAIN
+achieves state-of-the-art performance across five diverse benchmarks while maintaining computational
+efficiency. Ablation studies confirm the essential contributions of both dynamic scheduling and
+agent communication. Interpretability analyses reveal that DAIN agents develop semantically
+10
+
+===== PAGE 11 =====
+1
+2
+4
+6
+8
+Maximum Active Agents ( )
+81.5
+82.0
+82.5
+83.0
+83.5
+84.0
+84.5
+85.0
+Accuracy (%)
+MIMIC-IV: Accuracy vs. Agent Budget
+Optimal =4
+1
+2
+4
+6
+8
+Maximum Active Agents ( )
+2.35
+2.40
+2.45
+2.50
+2.55
+2.60
+2.65
+MSE (lower is better)
+CMU-MOSI: MSE vs. Agent Budget
+Optimal =4
+Figure 5: Efficiency-accuracy trade-off analysis. Performance (left: accuracy for MIMIC-IV; right:
+MSE for MOSI) as a function of maximum active agents τ. The optimal point at τ = 4 (marked with
+star) achieves peak performance while using only half the agent pool, demonstrating DAIN’s efficient
+resource utilization.
+2.5
+3.0
+3.5
+4.0
+4.5
+5.0
+5.5
+6.0
+Avg. Active Agents ( )
+0.15
+0.20
+0.25
+0.30
+0.35
+0.40
+0.45
+Communication Density ( )
+ADNI
+MIMIC-IV
+MM-IMDB
+MOSI
+ENRICO
+Agent-Communication Trade-off
+ADNI
+MIMIC-IV
+MM-IMDB
+MOSI
+ENRICO
+Dataset
+0
+1
+2
+3
+4
+5
+6
+7
+Average Active Agents
+Efficiency Metrics by Dataset
+Avg. Agents
+Comm. Density (%)
+0.5
+1.0
+1.5
+2.0
+2.5
+Performance Gain (%)
+0
+10
+20
+30
+40
+50
+Comm. Density (%)
+Figure 6: Communication and activation analysis across datasets. (Left) Scatter plot showing the
+relationship between average active agents and communication density, colored by performance gain.
+(Right) Per-dataset breakdown of efficiency metrics. DAIN dynamically adjusts both agent activation
+and communication patterns based on task requirements.
+meaningful specializations and are recruited according to input characteristics, providing actionable
+insights beyond prediction accuracy. Our work establishes the effectiveness of dynamic, agent-
+based paradigms for multimodal reasoning and opens directions for further research on learned
+communication protocols, adaptive agent allocation, and extension to generative multimodal tasks.
+References
+[1] ADNI Consortium. Alzheimer’s disease neuroimaging initiative (adni). https://adni.loni.
+usc.edu/, 2004.
+[2] John Arevalo, Thamar Solorio, Manuel Montes-y Gómez, and Fabio A. González. Gated multi-
+modal units for information fusion. In International Conference on Learning Representations
+Workshop, 2017.
+[3] Hila Chefer, Shir Gur, and Lior Wolf. Generic attention-model explainability for interpreting
+bi-modal and encoder-decoder transformers. In Proceedings of the IEEE/CVF International
+Conference on Computer Vision, pages 397–406, 2021.
+11
+
+===== PAGE 12 =====
+Table 6: Sensitivity analysis of key hyperparameters on ADNI validation set. Default values (bold)
+are used in all experiments.
+Hyperparameter
+Value
+Acc (%)
+∆
+α (specialization)
+0.01
+72.8
+-0.7
+0.05
+73.2
+-0.3
+0.10
+73.5
+—
+0.20
+73.1
+-0.4
+λact (activation)
+0.001
+73.0
+-0.5
+0.005
+73.3
+-0.2
+0.010
+73.5
+—
+0.050
+72.6
+-0.9
+λcomm (comm.)
+0.0001
+73.2
+-0.3
+0.0005
+73.4
+-0.1
+0.0010
+73.5
+—
+0.0050
+72.9
+-0.6
+K (num agents)
+4
+72.1
+-1.4
+6
+73.0
+-0.5
+8
+73.5
+—
+12
+73.3
+-0.2
+Table 7: Average agent activation weights across subgroups, revealing interpretable specialization
+patterns.
+Agent Activation
+Subgroup
+Synergy
+Unique
+Redund.
+ADNI: CN
+0.22
+0.51
+0.27
+ADNI: MCI
+0.41
+0.35
+0.24
+ADNI: Dementia
+0.38
+0.28
+0.34
+IMDB: Animation
+0.18
+0.65
+0.17
+IMDB: Biography
+0.25
+0.60
+0.15
+IMDB: Thriller
+0.55
+0.25
+0.20
+[4] Hila Chefer, Shir Gur, and Lior Wolf. Transformer interpretability beyond attention visualization.
+In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition,
+pages 782–791, 2021.
+[5] Huiyi Chen, Jiawei Peng, Dehai Min, Changchang Sun, Kaijie Chen, Yan Yan, Xu Yang, and
+Lu Cheng. Mvi-bench: A comprehensive benchmark for evaluating robustness to misleading
+visual inputs in lvlms. In Proceedings of the 43rd International Conference on Machine
+Learning (ICML 2026), 2025.
+[6] Kaijie Chen, Zihao Lin, Zhiyang Xu, Ying Shen, Yuguang Yao, Joy Rimchala, Jiaxin Zhang,
+and Lifu Huang. R2i-bench: Benchmarking reasoning-driven text-to-image generation. In
+Proceedings of the 2025 Conference on Empirical Methods in Natural Language Processing,
+pages 12606–12641, 2025.
+[7] Ke Chen, Lei Xu, and H. Chi. Improved learning algorithms for mixture of experts in multiclass
+classification. Neural Networks, 12(9):1229–1252, 1999.
+[8] Giulia Dominici, Huy Dang, Lara Silini, Karsten Roth, Fabio Chatelain, and Louis-Philippe
+Morency. Shapleyvic: Shapley values for multimodal importance scoring. In Proceedings of
+the AAAI Conference on Artificial Intelligence, 2023.
+12
+
+===== PAGE 13 =====
+ADNI: CN
+ADNI: MCI
+ADNI: Dementia
+IMDB: Animation
+IMDB: Biography
+IMDB: Thriller
+0.0
+0.1
+0.2
+0.3
+0.4
+0.5
+0.6
+0.7
+Average Activation Weight
+Agent Activation Patterns Across Data Subgroups
+Synergy Agent
+Uniqueness Agent
+Redundancy Agent
+Figure 7: Agent activation patterns across data subgroups. Different agent types (Synergy, Unique-
+ness, Redundancy) show distinct activation levels depending on the input characteristics, revealing
+interpretable specialization. The vertical line separates ADNI (medical) and MM-IMDB (general)
+datasets.
+[9] Zhihao Dou, Dongfei Cui, Jun Yan, Weida Wang, Benteng Chen, Haoming Wang, Zeke Xie,
+and Shufei Zhang. Dsadf: Thinking fast and slow for decision making. International Journal of
+Computer Vision, 134(6):270, 2026.
+[10] Zhihao Dou, Qinjian Zhao, Zhongwei Wan, Xiaoyu Xia, and Sumon Biswas. Core-code:
+Collaborative reinforcement learning for code generation. arXiv preprint arXiv:2605.24812,
+2026.
+[11] Zhihao Dou, Qinjian Zhao, Zhongwei Wan, Dinggen Zhang, Weida Wang, Towsif Raiyan,
+Benteng Chen, Qingtao Pan, Yang Ouyang, Zhiqiang Gao, et al. Plan then action: High-level
+planning guidance reinforcement learning for llm reasoning. arXiv preprint arXiv:2510.01833,
+2025.
+[12] Benoit Dufumier, Pietro Gori, Danielle Battaglia, Antoine Grigis, and Edouard Duchesnay.
+Multimodal contrastive learning for brain imaging. Medical Image Analysis, 2024.
+[13] Xiang Fan, Paul Pu Liang, and Louis-Philippe Morency. Multimodal fusion for explainable
+ai: A survey. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern
+Recognition, 2024.
+[14] William Fedus, Barret Zoph, and Noam Shazeer. Switch transformers: Scaling to trillion
+parameter models with simple and efficient sparsity. Journal of Machine Learning Research,
+23(120):1–39, 2022.
+[15] Xiang Fei, Jinghui Lu, Qi Sun, Hao Feng, Yanjie Wang, Wei Shi, An-Lan Wang, Jingqun Tang,
+and Can Huang. Advancing sequential numerical prediction in autoregressive models. arXiv
+preprint arXiv:2505.13077, 2025.
+13
+
+===== PAGE 14 =====
+10
+20
+30
+40
+50
+Epoch
+0.0
+0.5
+1.0
+1.5
+2.0
+2.5
+Validation Loss
+Training Convergence Comparison
+DAIN (Full)
+DAIN-Static
+Static MoE
+Figure 8: Training convergence comparison. DAIN (solid blue) converges faster and achieves lower
+validation loss compared to DAIN-Static (dashed orange) and Static MoE (dotted gray), indicating
+that dynamic mechanisms improve both optimization efficiency and final performance.
+[16] Hao Feng, Qi Liu, Hao Liu, Jingqun Tang, Wengang Zhou, Houqiang Li, and Can Huang.
+Docpedia: Unleashing the power of large multimodal model in the frequency domain for
+versatile document understanding. Science China Information Sciences, 67(12):1–14, 2024.
+[17] Hao Feng, Zijian Wang, Jingqun Tang, Jinghui Lu, Wengang Zhou, Houqiang Li, and Can Huang.
+Unidoc: A universal large multimodal model for simultaneous text detection, recognition,
+spotting and understanding. arXiv preprint arXiv:2308.11592, 2023.
+[18] Hao Feng, Shu Wei, Xiang Fei, Wei Shi, Yingdong Han, Lei Liao, Jinghui Lu, Binghong
+Wu, Qi Liu, Chunhui Lin, et al. Dolphin: Document image parsing via heterogeneous anchor
+prompting. arXiv preprint arXiv:2505.14059, 2025.
+[19] Ling Fu, Biao Yang, Zhebin Kuang, Jiajun Song, Yuzhe Li, Linghao Zhu, Qidi Luo, Xinyu Wang,
+Hao Lu, Mingxin Huang, et al. Ocrbench v2: An improved benchmark for evaluating large
+multimodal models on visual text localization and reasoning. arXiv preprint arXiv:2501.00321,
+2024.
+[20] Hongcheng Gao, Jiashu Qu, Jingyi Tang, Baolong Bi, Yue Liu, Hongyu Chen, Li Liang,
+Li Su, and Qingming Huang. Exploring hallucination of large multimodal models in video
+understanding: Benchmark, analysis and mitigation. arXiv preprint arXiv:2503.19622, 2025.
+[21] Pallabi Ghosh, Shreya Nag, Aman Bardhan, and Saumik Deb. Exploiting modality-specific
+features for multi-modal manipulation detection and grounding. In Proceedings of the IEEE/CVF
+Winter Conference on Applications of Computer Vision, 2024.
+[22] Dong Guo, Faming Wu, Feida Zhu, Fuxing Leng, Guang Shi, Haobin Chen, Haoqi Fan,
+Jian Wang, Jianyu Jiang, Jiawei Wang, et al. Seed1. 5-vl technical report. arXiv preprint
+arXiv:2505.07062, 2025.
+[23] Yixu Huang, Bo Li, Na Li, Zhe Wang, Kaijie Chen, Haonan Ge, Qingyi Si, Yuanzhe Shen,
+Ruihan Yang, Guangjing Wang, and Hongcheng Guo. Gui agents for continual game generation.
+arXiv preprint arXiv:2605.28258, 2026.
+14
+
+===== PAGE 15 =====
+[24] Aya Abdelsalam Ismail, Mohamed Gunady, Héctor Corrada Bravo, and Soheil Feizi. Improving
+deep learning interpretability by saliency guided training. Advances in Neural Information
+Processing Systems, 34, 2021.
+[25] Robert A. Jacobs, Michael I. Jordan, Steven J. Nowlan, and Geoffrey E. Hinton. Adaptive
+mixtures of local experts. Neural Computation, 3(1):79–87, 1991.
+[26] Qihang Jin, Enze Ge, Yuhang Xie, Hongying Luo, Junhao Song, Ziqian Bi, Chia Xin Liang,
+Jibin Guan, Joe Yeong, and Junfeng Hao. Multimodal representation learning and fusion.
+arXiv:2506.20494, 2025.
+[27] Alistair E. W. Johnson, Lucas Bulgarelli, Lu Shen, Alvin Gayles, Ayad Shammout, Steven
+Horng, Tom J. Pollard, Sicheng Hao, Benjamin Moody, Brian Gow, Li-wei H. Lehman, Leo A.
+Celi, and Roger G. Mark. Mimic-iv, a freely accessible electronic health record dataset. Scientific
+Data, 10:1, 2023.
+[28] Michael I. Jordan and Robert A. Jacobs. Hierarchical mixtures of experts and the em algorithm.
+Neural Computation, 6(2):181–214, 1994.
+[29] Jinwoo Kim, Hyungjoon Kim, Geonhui Lee, and Jongwoo Lee. Missing modality imagination
+network for emotion recognition with uncertain missing modalities. In Proceedings of the 61st
+Annual Meeting of the Association for Computational Linguistics, 2023.
+[30] Luis A. Leiva, Asutosh Hota, and Antti Oulasvirta. Enrico: A dataset for topic modeling of
+mobile ui designs. In 22nd International Conference on Human-Computer Interaction with
+Mobile Devices and Services, 2020.
+[31] Guohui Li, Ling Bai, Heng Zhang, Qiang Xu, Yuanze Zhou, Yuan Gao, Mujiangshan Wang,
+and Zihao Li. Velocity anomalies around the mantle transition zone beneath the qiangtang
+terrane, central tibetan plateau from triplicated p waveforms.
+Earth and Space Science,
+9(2):e2021EA002060, 2022.
+[32] Li Li, Jiashu Qu, Linxin Song, Yuxiao Zhou, Yuehan Qin, Tiankai Yang, and Yue Zhao. Treble
+counterfactual vlms: A causal approach to hallucination. In Findings of the Association for
+Computational Linguistics: EMNLP 2025, pages 18423–18434, 2025.
+[33] Chia Xin Liang, Pu Tian, Caitlyn Heqi Yin, Yao Yua, Wei An-Hou, Li Ming, Tianyang Wang,
+Ziqian Bi, and Ming Liu. A comprehensive survey and guide to multimodal large language
+models in vision-language tasks. arXiv:2411.06284, 2024.
+[34] Paul Pu Liang, Yun Cheng, Xiang Fan, Chun Kai Ling, Suzanne Nie, Richard Chen, Zihao Deng,
+Nicholas Allen, Randy Auerbach, Faisal Mahmood, Ruslan Salakhutdinov, and Louis-Philippe
+Morency. Quantifying & modeling multimodal interactions: An information decomposition
+framework. In Advances in Neural Information Processing Systems, volume 36, 2023.
+[35] Paul Pu Liang, Yiwei Lyu, Xiang Fan, Zetian Wu, Yun Cheng, Jason Wu, Leslie Chen, Peter
+Wu, Michelle A. Lee, Yuke Zhu, Ruslan Salakhutdinov, and Louis-Philippe Morency. Multi-
+bench: Multiscale benchmarks for multimodal representation learning. In Advances in Neural
+Information Processing Systems, volume 34, 2021.
+[36] Bin Lin, Zhenyu Tang, Yang Ye, Jiaxi Cui, Bin Zhu, Peng Jin, Junwu Zhang, Munan Ning, and
+Li Yuan. Moe-llava: Mixture of experts for large vision-language models. In Proceedings of
+the AAAI Conference on Artificial Intelligence, 2024.
+[37] Yuliang Liu, Jiaxin Zhang, Dezhi Peng, Mingxin Huang, Xinyu Wang, Jingqun Tang, Can
+Huang, Dahua Lin, Chunhua Shen, Xiang Bai, et al. Spts v2: single-point scene text spotting.
+IEEE Transactions on Pattern Analysis and Machine Intelligence, 2023.
+[38] Zhun Liu, Ying Shen, Varun Bharadwaj Lakshminarasimhan, Paul Pu Liang, AmirAli Bagher
+Zadeh, and Louis-Philippe Morency. Efficient low-rank multimodal fusion with modality-
+specific factors. In Proceedings of the 56th Annual Meeting of the Association for Computational
+Linguistics, pages 2247–2256, 2018.
+15
+
+===== PAGE 16 =====
+[39] Junxiang Long, Kun Huang, and Mengling Chen. Multimodal learning for healthcare: A survey.
+In npj Digital Medicine, 2024.
+[40] Jinghui Lu, Haiyang Yu, Yanjie Wang, Yongjie Ye, Jingqun Tang, Ziwei Yang, Binghong Wu,
+Qi Liu, Hao Feng, Han Wang, et al. A bounding box is worth one token: Interleaving layout and
+text in a large language model for document understanding. arXiv preprint arXiv:2407.01976,
+2024.
+[41] Jinghui Lu, Haiyang Yu, Siliang Xu, Shiwei Ran, Guozhi Tang, Siqi Wang, Bin Shan, Teng
+Fu, Hao Feng, Jingqun Tang, et al. Prolonged reasoning is not all you need: Certainty-based
+adaptive routing for efficient llm/mllm reasoning. arXiv preprint arXiv:2505.15154, 2025.
+[42] André F. T. Martins and Ramón Fernandez Astudillo. From softmax to sparsemax: A sparse
+model of attention and multi-label classification. In Proceedings of the 33rd International
+Conference on Machine Learning, pages 1614–1623. PMLR, 2016.
+[43] Basil Mustafa, Carlos Riquelme, Joan Puigcerver, Rodolphe Jenatton, and Neil Houlsby. Multi-
+modal contrastive learning with limoe: the language-image mixture of experts. In Advances in
+Neural Information Processing Systems, volume 35, 2022.
+[44] Chun-Hui Pan, Yi Qu, Yao Yao, and Mu-Jiang-Shan Wang. Hybridgnn: A self-supervised graph
+neural network for efficient maximum matching in bipartite graphs. Symmetry, 16(12):1631,
+2024.
+[45] Dong Huk Park, Lisa Anne Hendricks, Zeynep Akata, Anna Rohrbach, Bernt Schiele, Trevor
+Darrell, and Marcus Rohrbach. Multimodal explanations: Justifying decisions and pointing to
+the evidence. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern
+Recognition, pages 8779–8788, 2018.
+[46] Bin Shan, Xiang Fei, Wei Shi, An-Lan Wang, Guozhi Tang, Lei Liao, Jingqun Tang, Xiang Bai,
+and Can Huang. Mctbench: Multimodal cognition towards text-rich visual scenes benchmark.
+arXiv preprint arXiv:2410.11538, 2024.
+[47] Shanghai AI Lab, Yicheng Bao, Guanxu Chen, Mingkang Chen, Yunhao Chen, Chiyu Chen,
+Lingjie Chen, Sirui Chen, Xinquan Chen, Jie Cheng, et al. Safework-r1: Coevolving safety and
+intelligence under the ai-45◦law. arXiv preprint arXiv:2507.18576, 2025.
+[48] Noam Shazeer, Azalia Mirhoseini, Krzysztof Maziarz, Andy Davis, Quoc Le, Geoffrey Hinton,
+and Jeff Dean. Outrageously large neural networks: The sparsely-gated mixture-of-experts
+layer. In International Conference on Learning Representations, 2017.
+[49] Wenhao Sun, Xue-Mei Dong, Benlei Cui, and Jingqun Tang. Attentive eraser: Unleashing dif-
+fusion model’s object removal potential via self-attention redirection guidance. In Proceedings
+of the AAAI Conference on Artificial Intelligence, volume 39, pages 20734–20742, 2025.
+[50] Vinitra Swamy, Pol Gomez, Julien Beuret, Martin Jaggi, and Tanja Käser.
+Interpretable
+modality-aware knowledge distillation for multimodal learning. In Proceedings of the European
+Conference on Machine Learning and Principles and Practice of Knowledge Discovery in
+Databases, 2024.
+[51] Jingqun Tang, Weidong Du, Bin Wang, Wenyang Zhou, Shuqi Mei, Tao Xue, Xing Xu, and Hai
+Zhang. Character recognition competition for street view shop signs. National Science Review,
+10(6):nwad141, 2023.
+[52] Jingqun Tang, Chunhui Lin, Zhen Zhao, Shu Wei, Binghong Wu, Qi Liu, Hao Feng, Yang Li,
+Siqi Wang, Lei Liao, et al. Textsquare: Scaling up text-centric visual instruction tuning. arXiv
+preprint arXiv:2404.12803, 2024.
+[53] Jingqun Tang, Qi Liu, Yongjie Ye, Jinghui Lu, Shu Wei, Chunhui Lin, Wanqing Li, Mohamad
+Fitri Faiz Bin Mahmood, Hao Feng, Zhen Zhao, et al. Mtvqa: Benchmarking multilingual
+text-centric visual question answering. arXiv preprint arXiv:2405.11985, 2024.
+16
+
+===== PAGE 17 =====
+[54] Jingqun Tang, Wenming Qian, Luchuan Song, Xiena Dong, Lan Li, and Xiang Bai. Optimal
+boxes: boosting end-to-end scene text recognition by adjusting annotated bounding boxes via
+reinforcement learning. In European Conference on Computer Vision, pages 233–248. Springer,
+2022.
+[55] Jingqun Tang, Su Qiao, Benlei Cui, Yuhang Ma, Sheng Zhang, and Dimitrios Kanoulas. You
+can even annotate text with voice: Transcription-only-supervised text spotting. In Proceedings
+of the 30th ACM International Conference on Multimedia, MM ’22, page 4154–4163, New
+York, NY, USA, 2022. Association for Computing Machinery.
+[56] Jingqun Tang, Wenqing Zhang, Hongye Liu, MingKun Yang, Bo Jiang, Guanglong Hu, and
+Xiang Bai. Few could be better than all: Feature sampling and grouping for scene text detection.
+In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition,
+pages 4563–4572, 2022.
+[57] Shiry Tsai, Yu Cheng, Paul Pu Liang, Louis-Philippe Morency, and Ruslan Salakhutdinov.
+Learning individual styles of conversational gesture. arXiv preprint arXiv:1906.04160, 2020.
+[58] Yao-Hung Hubert Tsai, Shaojie Bai, Paul Pu Liang, J. Zico Kolter, Louis-Philippe Morency, and
+Ruslan Salakhutdinov. Multimodal transformer for unaligned multimodal language sequences.
+In Proceedings of the 57th Annual Meeting of the Association for Computational Linguistics,
+pages 6558–6569, 2019.
+[59] An-Lan Wang, Bin Shan, Wei Shi, Kun-Yu Lin, Xiang Fei, Guozhi Tang, Lei Liao, Jingqun
+Tang, Can Huang, and Wei-Shi Zheng. Pargo: Bridging vision-language with partial and global
+views. In Proceedings of the AAAI Conference on Artificial Intelligence, volume 39, pages
+7491–7499, 2025.
+[60] An-Lan Wang, Jingqun Tang, Liao Lei, Hao Feng, Qi Liu, Xiang Fei, Jinghui Lu, Han Wang,
+Weiwei Liu, Hao Liu, et al. Wilddoc: How far are we from achieving comprehensive and robust
+document understanding in the wild? arXiv preprint arXiv:2505.11015, 2025.
+[61] Han Wang, Yongjie Ye, Bingru Li, Yuxiang Nie, Jinghui Lu, Jingqun Tang, Yanjie Wang, and
+Can Huang. Vision as lora. arXiv preprint arXiv:2503.20680, 2025.
+[62] Mujiangshan Wang, Yuqing Lin, Shiying Wang, and Meiyu Wang. Sufficient conditions for
+graphs to be maximally 4-restricted edge connected. Australas. J Comb., 70:123–136, 2018.
+[63] Mujiangshan Wang and Shiying Wang. Connectivity and diagnosability of center k-ary n-cubes.
+Discrete Applied Mathematics, 294:98–107, 2021.
+[64] Mujiangshan Wang, Dong Xiang, Yi Qu, and Guohui Li. The diagnosability of interconnection
+networks. Discrete Applied Mathematics, 357:413–428, 2024.
+[65] Mujiangshan Wang, Dong Xiang, and Shiying Wang. Connectivity and diagnosability of
+leaf-sort graphs. Parallel Processing Letters, 30(03):2040004, 2020.
+[66] Mujiangshan Wang, Shuhao Xu, Jincheng Jiang, Dong Xiang, and Sun-Yuan Hsieh. Global
+reliable diagnosis of networks based on self-comparative diagnosis model and g-good-neighbor
+property. Journal of Computer and System Sciences, page 103698, 2025.
+[67] Shiying Wang and Mujiangshan Wang. A note on the connectivity of m-ary n-dimensional
+hypercubes. Parallel Processing Letters, 29(04):1950017, 2019.
+[68] Shiying Wang, Zhenhua Wang, Mujiangshan Wang, and Weiping Han. g-good-neighbor
+conditional diagnosability of star graph networks under pmc model and mm* model. Frontiers
+of Mathematics in China, 12(5):1221–1234, 2017.
+[69] Zichen Wen, Jiashu Qu, Zhaorun Chen, Xiaoya Lu, Dongrui Liu, Zhiyuan Liu, Ruixi Wu, Yicun
+Yang, Xiangqi Jin, Haoyun Xu, Xuyang Liu, Weijia Li, Chaochao Lu, Jing Shao, Conghui He,
+and Linfeng Zhang. The devil behind the mask: An emergent safety vulnerability of diffusion
+llms. arXiv preprint arXiv:2507.11097, 2025.
+17
+
+===== PAGE 18 =====
+[70] Sandra Wenderoth, Yiming Yang, and Manfred Hauswirth. Explainable multimodal ai: A survey.
+arXiv preprint arXiv:2405.00000, 2024.
+[71] Torsten Wörtwein, Gunnar S. Bahr, and Louis-Philippe Morency. Multimodal interaction
+modeling via self-supervised multi-task learning. In Proceedings of the International Conference
+on Affective Computing and Intelligent Interaction, 2024.
+[72] Torsten Wörtwein, Louis-Philippe Morency, and Stefan Scherer. Beyond additive fusion:
+Learning non-additive multimodal interactions. In Findings of the Association for Computational
+Linguistics: EMNLP 2022, 2022.
+[73] Dong Xiang, Sun-Yuan Hsieh, et al. G-good-neighbor diagnosability under the modified
+comparison model for multiprocessor systems. Theoretical Computer Science, 1028:115027,
+2025.
+[74] Zihui Xue and Radu Marculescu. Dynamic multimodal fusion. In Proceedings of the IEEE/CVF
+Conference on Computer Vision and Pattern Recognition Workshops, 2023.
+[75] Zheyu Yao, Yichao Zhang, Ningyuan Deng, Xinyuan Song, Ziqian Bi, Keyu Chen, Ming Li,
+Qian Niu, Junyu Liu, Benji Peng, et al. Multimodal embeddings for representation learning.
+2025.
+[76] Mingjie You, Kaijie Chen, and Dawei Cheng. Drdgrl: Dual-relational dynamic graph repre-
+sentation learning for delay-sensitive stock trend prediction. In International Conference on
+Database Systems for Advanced Applications, pages 35–50. Springer, 2026.
+[77] Haofei Yu, Zhengyang Qi, Lawrence Jang, Ruslan Salakhutdinov, Louis-Philippe Morency, and
+Paul Pu Liang. Mmoe: Enhancing multimodal models with mixtures of multimodal interaction
+experts. In Proceedings of the 2024 Conference on Empirical Methods in Natural Language
+Processing, pages 10006–10030, 2024.
+[78] Seniha Esen Yüksel, Joseph N. Wilson, and Paul D. Gader. Twenty years of mixture of experts.
+IEEE Transactions on Neural Networks and Learning Systems, 23(8):1177–1193, 2012.
+[79] Amir Zadeh, Rowan Zellers, Eli Pincus, and Louis-Philippe Morency. Mosi: Multimodal corpus
+of sentiment intensity and subjectivity analysis in online opinion videos. In IEEE Intelligent
+Systems, 2016.
+[80] AmirAli Bagher Zadeh, Paul Pu Liang, Soujanya Poria, Erik Cambria, and Louis-Philippe
+Morency. Multimodal language analysis in the wild: Cmu-mosei dataset and interpretable
+dynamic fusion graph. In Proceedings of the 56th Annual Meeting of the Association for
+Computational Linguistics, pages 2236–2246, 2018.
+[81] Danyang Zhang, Junhao Song, Ziqian Bi, Yingfang Yuan, Tianyang Wang, Joe Yeong, and
+Junfeng Hao. Mixture of experts in large language models. arXiv:2507.11181, 2025.
+[82] Haobo Zhang, Xutao Mao, Guangyuan Dong, Ziwei Li, Xuanbo Su, Kaijie Chen, Jing Yang, and
+Zheng Lin. Memmark: State-evolution attribution watermarking for agent long-term memory
+systems. arXiv preprint arXiv:2605.25002, 2026.
+[83] Yanfang Zhang, Shuo Zhang, and Kun Huang. Multimodal learning with missing modality: A
+survey. In Proceedings of the 31st ACM International Conference on Multimedia, 2023.
+[84] Qinjian Zhao, Zhihao Dou, Dinggen Zhang, Xiangyu Li, Chaoda Song, Zhongwei Wan, Xinpeng
+Li, Yanyan Zhang, Kaijie Chen, Qingtao Pan, et al. Stride: Strategic trajectory reasoning via dis-
+criminative estimation for verifiable reinforcement learning. arXiv preprint arXiv:2606.15866,
+2026.
+[85] Weichao Zhao, Hao Feng, Qi Liu, Jingqun Tang, Binghong Wu, Lei Liao, Shu Wei, Yongjie Ye,
+Hao Liu, Wengang Zhou, et al. Tabpedia: Towards comprehensive visual table understanding
+with concept synergy. Advances in Neural Information Processing Systems, 37:7185–7212,
+2025.
+18
+
+===== PAGE 19 =====
+[86] Zhen Zhao, Jingqun Tang, Chunhui Lin, Binghong Wu, Can Huang, Hao Liu, Xin Tan, Zhizhong
+Zhang, and Yuan Xie. Multi-modal in-context learning makes an ego-evolving scene text
+recognizer. In Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern
+Recognition, pages 15567–15576, 2024.
+[87] Zhen Zhao, Jingqun Tang, Binghong Wu, Chunhui Lin, Shu Wei, Hao Liu, Xin Tan, Zhizhong
+Zhang, Can Huang, and Yuan Xie. Harmonizing visual text comprehension and generation.
+arXiv preprint arXiv:2407.16364, 2024.
+19

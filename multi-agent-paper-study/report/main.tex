@@ -1,0 +1,64 @@
+% Báo cáo tìm hiểu hai công trình Multi-Agent Systems and Collaborative Reasoning
+% Biên dịch bằng Tectonic (engine XeTeX) hoặc XeLaTeX/LuaLaTeX:
+%   tectonic main.tex
+% Font: Times New Roman của hệ thống (hỗ trợ đầy đủ tiếng Việt trên Windows);
+% trên Linux/macOS hãy đổi sang TeX Gyre Termes trong phần fontspec bên dưới.
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+\usepackage{fontspec}
+% --- Windows ---
+\setmainfont{Times New Roman}
+\setsansfont{Arial}
+\setmonofont{Consolas}
+% --- Linux/macOS (bỏ chú thích ba dòng dưới, chú thích ba dòng trên):
+% \setmainfont{TeX Gyre Termes}
+% \setsansfont{TeX Gyre Heros}
+% \setmonofont{TeX Gyre Cursor}
+
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{url}
+\usepackage[hidelinks]{hyperref}
+\usepackage{xcolor}
+
+% Ghi chú kết quả tự chạy — dùng để tách bạch số liệu của tác giả và số liệu tự đo
+\newcommand{\ours}[1]{#1}
+
+\title{Tìm hiểu và thực nghiệm các phương pháp cải thiện\\ giao tiếp và phối hợp tác tử trong hệ thống Multi-Agent}
+
+\author{
+\IEEEauthorblockN{Họ và tên sinh viên}
+\IEEEauthorblockA{Khoa/lớp -- Trường Đại học\\
+Email}
+\and
+\IEEEauthorblockN{Hướng dẫn: Giảng viên hướng dẫn}
+\IEEEauthorblockA{Bộ môn}
+}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+Bài báo cáo này tìm hiểu hai công trình gần đây về giao tiếp và phối hợp tác tử trong hệ thống đa tác tử. Công trình thứ nhất, Agent-Radar, xử lý tình trạng lịch sử trao đổi phình to khiến thông tin liên quan bị loãng trong ngữ cảnh của các tác tử dựa trên LLM. Công trình này chấm điểm từng câu trong lịch sử theo độ tương đồng ngữ nghĩa nhân với hai hệ số suy giảm theo khoảng cách trên đồ thị giao tiếp và theo thời gian, rồi lái attention của mô hình về các câu được chọn mà không xóa bỏ gì. Công trình thứ hai, DAIN, coi việc hợp nhất dữ liệu đa phương thức là quá trình cộng tác giữa tám tác tử chuyên biệt: một Meta-Controller chỉ kích hoạt nhóm tác tử phù hợp với từng mẫu đầu vào và điều phối trao đổi thông tin nén giữa chúng. Báo cáo phân tích hai phương pháp, so sánh thiết kế của chúng, và xây dựng hai chương trình thực nghiệm có thể chạy lại: một thí nghiệm đánh giá chất lượng chọn ngữ cảnh của cơ chế Agent-Radar trên HotpotQA với lịch sử trao đổi mô phỏng, và một thí nghiệm huấn luyện bản DAIN đơn giản hóa trên dữ liệu thật ENRICO để so sánh với các baseline fusion tĩnh. Kết quả đo được cho thấy bộ chọn ngữ cảnh theo công thức của Agent-Radar nén lịch sử xuống khoảng 3\% số từ trong khi tăng mật độ bằng chứng gấp đôi, và thí nghiệm cũng cho thấy khi cơ chế này được dùng như bộ lọc cứng (không có bước lái attention như paper gốc) thì chất lượng trả lời của một bộ đọc yếu giảm xuống -- nhất quán với lập luận của chính paper rằng chọn ngữ cảnh phải đi kèm cách đưa nó vào lúc suy luận. Với DAIN, bản đơn giản hóa tái hiện đúng thứ tự ablation của paper (mô hình đầy đủ tốt hơn biến thể bỏ giao tiếp và biến thể bỏ điều phối) nhưng không tái hiện được lợi thế so với early fusion khi dữ liệu nhỏ và encoder yếu. Báo cáo cũng nêu rõ những phần chỉ là mô phỏng hoặc đơn giản hóa và những gì không thể kiểm chứng trong điều kiện tài nguyên hiện có.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Multi-Agent Systems, Collaborative Reasoning, Agent-Radar, DAIN, Agent Communication, Dynamic Agent Coordination
+\end{IEEEkeywords}
+
+\input{sections/intro}
+\input{sections/background}
+\input{sections/agent_radar}
+\input{sections/dain}
+\input{sections/comparison}
+\input{sections/experiments}
+\input{sections/results}
+\input{sections/conclusion}
+
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}

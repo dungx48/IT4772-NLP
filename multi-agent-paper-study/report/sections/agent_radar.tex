@@ -1,0 +1,50 @@
+\section{Phương pháp Agent-Radar}\label{sec:agentradar}
+
+\subsection{Bài toán và động lực nghiên cứu}
+Trong một hệ MAS dựa trên LLM, mỗi vòng trao đổi thêm một lớp thông điệp vào ngữ cảnh của mọi tác tử liên quan. Sau vài vòng, ngữ cảnh của một tác tử chứa rất nhiều thứ: câu hỏi gốc, các ràng buộc của nhiệm vụ, bằng chứng trung gian hữu dụng, và một lượng lớn câu lặp ý hoặc lạc đề. Mô hình phải ``tìm đúng'' vài câu quan trọng trong đống này, và theo~\cite{liu2024lost}, khả năng tìm đúng giảm rõ khi thông tin nằm giữa ngữ cảnh dài. Agent-Radar nêu ra hai hướng xử lý phổ biến trước đó đều có nhược điểm chung: tóm tắt định kỳ nén lịch sử nhưng có thể bỏ mất tín hiệu tinh tế; cắt tỉa tác tử hoặc liên kết giảm token nhưng vĩnh viễn bỏ đi một phần thông tin~\cite{agentradar2026}.
+
+\subsection{Ý tưởng cốt lõi}
+Agent-Radar chọn hướng thứ ba: \emph{không xóa, không nén, không sửa lịch sử}. Thay vào đó, với mỗi bước sinh của mỗi tác tử, phương pháp chọn ra một tập câu liên quan trong lịch sử và lái attention của LLM về tập đó. Toàn bộ lịch sử vẫn nằm trong prompt; các câu được chọn chỉ nhận thêm ``sự chú ý''. Vì vậy phương pháp là một lớp phủ (plug-in) training-free: không cần huấn luyện, không đổi topology của hệ MAS, không đổi trọng số LLM.
+
+\subsection{Công thức hóa và kiến trúc}
+Paper mô hình hóa hệ MAS là đồ thị có hướng $G = (V, E, F)$, với $V$ là tập $N$ tác tử, $E$ là tập cạnh giao tiếp, $F$ là tập hàm suy luận~\cite{agentradar2026}. Khoảng cách giữa hai tác tử $d_G(v_j, v_i)$ là số cạnh của đường đi ngắn nhất từ $v_j$ đến $v_i$. Tại vòng $t$, tác tử đang hoạt động $v_i$ sinh phản hồi
+\begin{equation}
+o^{(t)}_i = f_i\big(q^{(t)}, Z^{(t)}_i\big),
+\label{eq:ar-infer}
+\end{equation}
+trong đó $q^{(t)}$ là truy vấn hiện tại và $Z^{(t)}_i$ là lịch sử tích lũy từ mọi tác tử tới được $v_i$. Agent-Radar bổ sung tham số $\hat{Z}^{(t)}_i$ -- ngữ cảnh được chọn -- và cập nhật bước suy luận thành $o^{(t)}_i = f_i(q^{(t)}, Z^{(t)}_i, \hat{Z}^{(t)}_i)$.
+
+\subsection{Cơ chế đánh giá mức liên quan của ngữ cảnh}
+Mỗi thông điệp $o^{(\tau)}_j$ trong lịch sử nhận một điểm liên quan gồm hai nhân tử suy giảm:
+\begin{equation}
+r_i(o^{(\tau)}_j; t) = \underbrace{\lambda_s^{\,d_G(v_j, v_i) - 1}}_{\text{suy giảm không gian}} \cdot \underbrace{\lambda_t^{\,t - \tau - 1}}_{\text{suy giảm thời gian}},
+\label{eq:ar-decay}
+\end{equation}
+với $0 < \lambda_s, \lambda_t < 1$. Thông điệp từ tác tử là láng giềng trực tiếp (hoặc của chính tác tử) có trọng số không gian bằng 1; thông điệp mới nhất có trọng số thời gian bằng 1. Ý nghĩa của hai nhân tử khác nhau: $\lambda_s$ nói rằng thông tin đi qua càng nhiều trung gian càng khó tin và dễ nhiễu; $\lambda_t$ nói rằng thông tin càng cũ càng có khả năng đã bị sửa hoặc thay thế ở các vòng sau.
+
+Trên nền hai hệ số đó, paper thực hiện truy xuất mức câu. Mỗi thông điệp được cắt thành các câu $s_k$, mã hóa bằng một sentence encoder (all-MiniLM-L6-v2~\cite{reimers2019sbert}), và so cosine với truy vấn hiện tại. Điểm tổng hợp của câu $s_k$ là
+\begin{equation}
+\mathrm{score}(s_k) = r_i(o^{(\tau)}_j; t)\cdot \cos\big(\mathrm{Enc}(s_k), \mathrm{Enc}(q^{(t)})\big).
+\label{eq:ar-score}
+\end{equation}
+Ngữ cảnh được chọn gồm truy vấn và mọi câu có điểm vượt ngưỡng $\theta$:
+\begin{equation}
+\hat{Z}^{(t)}_i = \{q^{(t)}\} \cup \big\{s_k \mid \mathrm{score}(s_k) \ge \theta\big\}.
+\label{eq:ar-select}
+\end{equation}
+Truy vấn luôn được giữ lại, để phần lịch sử được chọn không lấn át mục tiêu suy luận. Thiết lập mặc định của paper: $\lambda_s = \lambda_t = 0{,}92$ và $\theta = 0{,}65$.
+
+\subsection{Cơ chế lái attention}
+Các câu trong $\hat{Z}^{(t)}_i$ được khuếch đại attention bằng Selective Prompt Anchoring (SPA)~\cite{tian2025spa}, một kỹ thuật can thiệp vào phân bố logit tại lúc suy luận, không đụng vào trọng số mô hình. Paper cũng thử thay SPA bằng PASTA~\cite{zhang2024pasta} và thấy phương pháp vẫn có lợi, nên cơ chế này không phụ thuộc một backend cụ thể.
+
+\emph{Ví dụ nhỏ.} Giả sử tác tử đang đọc ở vòng $t=4$, truy vấn hỏi về một khái niệm tổ chức. Một câu từ báo cáo của tác tử láng giềng (hop $=1$) ở vòng 3 có điểm suy giảm $\lambda_s^0 \cdot \lambda_t^0 = 1$; nếu cosine với truy vấn là $0{,}8$ thì score là $0{,}8 \ge \theta$ -- được chọn. Một câu nội dung tương tự nhưng từ tác tử cách 3 hop và viết ở vòng 1 có điểm $\lambda_s^2 \cdot \lambda_t^2 \cdot 0{,}8 \approx 0{,}51$ -- không qua ngưỡng, dù câu vẫn nằm nguyên trong lịch sử.
+
+\subsection{Thiết lập thực nghiệm trong paper}
+Agent-Radar được đánh giá trên năm bộ dữ liệu: HotpotQA, 2WikiMultihopQA, MuSiQue (báo cáo F1), MATH-500 và MMLU-Pro (báo cáo accuracy). Mô hình nền chính là Qwen3-4B-Instruct, kiểm chứng thêm trên Llama-3.1-8B và Qwen3-32B. Hệ MAS mặc định gồm 5 tác tử chạy 2 vòng trên đồ thị ngẫu nhiên; baseline gồm Vanilla, CoT-SC, Compaction (nén ngữ cảnh), AgentPrune và AgentDropout (cắt tỉa). Phương pháp cũng được cắm vào ba khung MAS có sẵn: GPTSwarm, AutoGen và MAD.
+
+\subsection{Kết quả và nhận xét}
+Số liệu trong phần này là kết quả do các tác giả của Agent-Radar công bố~\cite{agentradar2026}. Trên cả năm bộ dữ liệu, Agent-Radar đạt điểm cao nhất trong số các phương pháp so sánh: 80,78 F1 trên HotpotQA (+7,64 so với AgentDropout, mức tăng lớn nhất được nêu), 80,81 trên 2Wiki, 39,72 trên MuSiQue, 88,80 trên MATH-500 và 69,40 trên MMLU-Pro. Khi cắm vào GPTSwarm, mức tăng lớn nhất là 12,87 điểm F1 trên MuSiQue. Phương pháp giữ lợi thế trên cả topology phân tầng và liên kết đầy đủ.
+
+Hai kết quả ablation đáng chú ý. Thứ nhất, bỏ phần lái attention (chỉ nối thêm các câu được chọn vào prompt) làm MuSiQue giảm từ 39,72 xuống 35,27 -- nghĩa là chọn ngữ cảnh tốt thôi chưa đủ, cách đưa nó vào lúc suy luận cũng quan trọng. Thứ hai, bỏ riêng suy giảm không gian làm MuSiQue giảm xuống 28,41, mạnh hơn cả việc bỏ đồng thời hai hệ số suy giảm (33,97); tác giả giải thích rằng chỉ dùng một trong hai hệ số có thể đẩy sai lệch điểm số theo một chiều, trong khi kết hợp cả hai mới phân biệt được bằng chứng thật với nhiễu. Về chi phí, thời gian chạy tăng từ 968,8 lên 1196,5 giây mỗi nhiệm vụ (khoảng +23\%), thấp hơn mức tăng của Compaction và AgentDropout.
+
+Giới hạn được nêu trong paper: cần chọn $\lambda_s, \lambda_t, \theta$ bằng tay; chất lượng phụ thuộc bộ truy xuất ngữ nghĩa; và phải có backend can thiệp attention, vốn chỉ hoạt động với LLM chạy cục bộ.

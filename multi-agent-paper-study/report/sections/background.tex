@@ -1,0 +1,18 @@
+\section{Cơ sở lý thuyết và công trình liên quan}\label{sec:background}
+
+Phần này nhắc lại những khái niệm cần dùng khi đọc hai công trình chính, giữ ở mức vừa đủ để theo dõi các phần sau.
+
+\subsection{Hệ đa tác tử dựa trên LLM và suy luận cộng tác}
+Một hệ đa tác tử (MAS) gồm nhiều thực thể tự chủ, mỗi thực thể được trang bị một vai trò, một tập thông tin và một quy trình suy luận riêng. Với các LLM, ``tác tử'' thường được hiện thực bằng một prompt mô tả vai trò (ví dụ \emph{nhà phê bình}, \emph{chuyên gia toán học}) chạy trên cùng một mô hình nền. \emph{Suy luận cộng tác} (collaborative reasoning) là cách tổ chức trong đó các tác tử lần lượt sinh câu trả lời, đọc câu trả lời của nhau và chỉnh sửa theo nhiều vòng, ví dụ tranh luận đa tác tử (Multi-Agent Debate)~\cite{du2024debate} hay các khung như AutoGen~\cite{wu2024autogen} và GPTSwarm~\cite{zhuge2024gptswarm}. Lợi ích đến từ việc các tác tử bù thiếu sót cho nhau; cái giá là toàn bộ nội dung trao đổi đều nằm trong ngữ cảnh của những lần sinh sau.
+
+\subsection{Giao tiếp tác tử và quản lý ngữ cảnh}
+Trong MAS, \emph{giao tiếp} là quá trình một tác tử chuyển thông điệp cho tác tử khác theo một cấu trúc liên kết (topology) cho trước: liên kết đầy đủ, phân tầng, hoặc ngẫu nhiên. Lịch sử giao tiếp chính là ngữ cảnh đầu vào của các tác tử. \emph{Quản lý ngữ cảnh} (context management) là tập các kỹ thuật giữ cho ngữ cảnh hữu dụng khi nó dài ra: tóm tắt định kỳ, cắt tỉa thông điệp hoặc tác tử thừa (ví dụ AgentPrune~\cite{zhang2025agentprune} và AgentDropout~\cite{wang2025agentdropout}), hoặc -- như Agent-Radar -- giữ nguyên lịch sử và thay đổi cách chú ý tới nó.
+
+\subsection{Attention steering}
+Cơ chế attention của Transformer cho phép mô hình gán trọng số cho từng vị trí trong ngữ cảnh khi sinh từ tiếp theo~\cite{vaswani2017attention}. \emph{Attention steering} là nhóm kỹ thuật can thiệp trực tiếp vào cơ chế này ở lúc suy luận: khuếch đại attention vào một đoạn được chỉ định (Selective Prompt Anchoring -- SPA~\cite{tian2025spa}, PASTA~\cite{zhang2024pasta}). Đặc điểm chung của nhóm này là không cần huấn luyện lại, nhưng cần truy cập vào bên trong mô hình, nên chỉ áp dụng được với LLM chạy cục bộ.
+
+\subsection{Hợp nhất đa phương thức và Mixture-of-Experts}
+\emph{Hợp nhất đa phương thức} (multimodal fusion) là bài toán kết hợp thông tin từ nhiều loại dữ liệu -- ảnh, văn bản, âm thanh, dữ liệu chuỗi -- để ra một dự đoán. Khung \emph{Partial Information Decomposition}~\cite{liang2023pid} chia thông tin liên modality thành ba loại: thông tin riêng của từng modality (uniqueness), thông tin trùng nhau giữa các modality (redundancy) và thông tin chỉ xuất hiện khi kết hợp (synergy). Kiến trúc \emph{Mixture-of-Experts} (MoE)~\cite{jacobs1991adaptive} dùng nhiều mạng con ``chuyên gia'' và một bộ định tuyến chọn cách trộn đầu ra của chúng theo từng mẫu; phiên bản thưa (sparse MoE)~\cite{shazeer2017outrageously} chỉ chạy một nhóm chuyên gia nhỏ cho mỗi mẫu. DAIN kế thừa cả hai ý trên nhưng thay bộ định tuyến tĩnh bằng một bộ điều phối học được kèm trao đổi thông tin giữa các chuyên gia.
+
+\subsection{Điều phối động tác tử}
+\emph{Điều phối động} (dynamic coordination) nghĩa là nhóm tác tử tham gia và đường thông tin giữa chúng được quyết định theo từng đầu vào, khác với kiến trúc tĩnh trong đó mọi tác tử chạy với cùng một sơ đồ. Hai hình thức động gặp trong hai paper: chọn lại ngữ cảnh ở mỗi bước sinh (Agent-Radar) và chọn lại nhóm tác tử cho mỗi mẫu (DAIN).

@@ -1,0 +1,55 @@
+\section{Phương pháp DAIN}\label{sec:dain}
+
+\subsection{Bài toán suy luận đa phương thức}
+Bài toán ở đây khác Agent-Radar về bản chất: đầu vào của mô hình gồm nhiều modality (ảnh, văn bản, âm thanh, dữ liệu lâm sàng...), và việc hợp nhất chúng quyết định chất lượng dự đoán. Các kiến trúc fusion phổ biến -- nối đặc trưng (early fusion), hợp nhất dự đoán (late fusion), hoặc các biến thể MoE -- đều có cấu trúc cố định: mọi modality, mọi ``chuyên gia'' chạy theo cùng một sơ đồ cho mọi mẫu. DAIN lập luận rằng các tương tác giữa modality chia làm ba loại theo khung PID~\cite{liang2023pid} (uniqueness, redundancy, synergy), và với từng mẫu cụ thể chỉ một số loại tương tác là cần thiết; chạy toàn bộ vừa tốn vừa nhét nhiễu vào dự đoán.
+
+\subsection{Ý tưởng điều phối tác tử động}
+DAIN chuyển bài toán fusion thành bài toán cộng tác đa tác tử: một pool các \emph{tác tử tương tác} chuyên biệt, mỗi tác tử phụ trách một loại tương tác đa phương thức, và một \emph{Meta-Controller} quyết định -- cho từng mẫu -- tác tử nào chạy và chúng trao đổi thông tin với nhau theo đường nào. Khác MoE thông thường, các tác tử được chọn còn trao đổi thông tin với nhau trước khi hợp nhất, và toàn bộ quá trình (điều phối, giao tiếp, hợp nhất) học cùng nhau từ đầu đến cuối.
+
+\subsection{Kiến trúc DAIN}
+Kiến trúc gồm ba giai đoạn~\cite{dain2026}. Pool có $K = 8$ tác tử, chia theo PID thành 3 tác tử synergy, 3 tác tử uniqueness và 2 tác tử redundancy (phân bổ này có thể đổi theo nhiệm vụ). Mỗi modality $m_i$ được mã hóa bởi một encoder riêng $E_i$ thành embedding $e_i$.
+
+Giai đoạn đầu, Meta-Controller tạo vector ngữ cảnh bằng cách nối các embedding và chiếu tuyến tính:
+\begin{equation}
+e_c = W_c[e_1; e_2; \dots; e_n] + b_c.
+\label{eq:dain-ctx}
+\end{equation}
+Từ $e_c$, bộ điều phối sinh vector kích hoạt thưa:
+\begin{equation}
+g = \mathrm{Top}_\tau\big(\mathrm{Softmax}(G_{gate}(e_c))\big),
+\label{eq:dain-gate}
+\end{equation}
+chỉ giữ $\tau$ tác tử có gate khác 0, và đồng thời sinh đồ thị giao tiếp mềm
+\begin{equation}
+\Phi = \sigma\big(G_{comm}(e_c)\big) \in \mathbb{R}^{K\times K},
+\label{eq:dain-comm}
+\end{equation}
+trong đó $\Phi_{ij}$ là độ mạnh dòng thông tin từ tác tử $A_j$ sang $A_i$. Cả hai đều phụ thuộc từng mẫu đầu vào.
+
+Giai đoạn hai, mỗi tác tử được kích hoạt tính trạng thái ban đầu $h^{(0)}_k = f_k(e_c;\theta_k)$, rồi trao đổi thông tin qua một nút cổ chai nén: thông điệp từ $A_j$ tới $A_i$ là $m_{i\leftarrow j} = B(h^{(0)}_j;\,\phi_{ij})$ với $\phi_{ij} = \Phi_{ij}\cdot\mathbb{I}(g_j > 0)$ và $B(h;\phi) = \phi\,(W_B h)$, trong đó $W_B$ là phép chiếu hạng thấp. Kết nối mạnh cho truyền nhiều thông tin; kết nối yếu gần như chặn. Trạng thái sau trao đổi là
+\begin{equation}
+h^{(1)}_i = \mathrm{LayerNorm}\Big(h^{(0)}_i + \mathrm{ReLU}\Big(W_u \textstyle\sum_{j\neq i} m_{i\leftarrow j}\Big)\Big).
+\label{eq:dain-update}
+\end{equation}
+Giai đoạn ba, dự đoán được hợp nhất bằng một module multi-head attention trên trạng thái của các tác tử đang bật: $\hat{y} = C(\{h^{(1)}_k \mid g_k > 0\})$.
+
+\subsection{Vai trò của Meta-Controller}
+Meta-Controller gánh hai quyết định trong một lần tính: \emph{ai chạy} (Eq.~\ref{eq:dain-gate}) và \emph{ai nói với ai} (Eq.~\ref{eq:dain-comm}). Cả hai chỉ đọc vector ngữ cảnh $e_c$, nên chi phí điều phối nhỏ (0,26 triệu tham số trong triển khai của paper) so với phần còn lại của mô hình. Nhờ điều phối theo mẫu, mô hình có thể ``dài ra'' bằng cách thêm tác tử vào pool mà không tăng chi phí tuyến tính theo số tác tử cho mỗi mẫu.
+
+\subsection{Hàm mục tiêu và các thành phần tối ưu hóa}
+DAIN huấn luyện với hàm loss tổng hợp:
+\begin{equation}
+L_{total} = L_{task} + \alpha L_{spec} + \lambda_{act}\|g\|_1 + \lambda_{comm}\|\Phi\|_F^2,
+\label{eq:dain-loss}
+\end{equation}
+trong đó $L_{task}$ là cross-entropy (phân loại) hoặc MSE (hồi quy). Thành phần chuyên môn hóa $L_{spec}$ đo độ phân kỳ của đầu ra từng tác tử khi làm nhiễu đầu vào (che từng modality): một tác tử thật sự chuyên môn phải phản ứng khác nhau khi mất các modality khác nhau. Hai số hạng còn lại điều tiết hiệu suất: $\|g\|_1$ ép kích hoạt thưa hơn mức $\tau$ cho phép, $\|\Phi\|_F^2$ chống đồ thị giao tiếp dày đặc. Paper cũng nêu phân tích hội tụ $O(1/\sqrt{T})$ và chi phí tính toán $O(\bar{\tau} C_{agent} + \bar{\tau}^2 C_{comm})$ với $\bar{\tau}$ là số tác tử kích hoạt trung bình.
+
+\subsection{Thiết lập thực nghiệm trong paper}
+Số liệu trong phần này là kết quả do các tác giả của DAIN công bố~\cite{dain2026}. Đánh giá trên năm bộ dữ liệu đa phương thức: ADNI (chẩn đoán Alzheimer từ MRI, PET, dữ liệu gen), MIMIC-IV (dự báo tử vong ICU), MM-IMDB (phân loại thể loại phim từ poster và tóm tắt), CMU-MOSI (cường độ cảm xúc từ video, âm thanh, văn bản) và ENRICO (phân loại chủ đề thiết kế màn hình di động). Encoder là ResNet-50 (ảnh), BERT-base (văn bản) và transformer cho dữ liệu chuỗi, embedding 512 chiều. Huấn luyện bằng Adam, lr $10^{-4}$, batch 32, early stopping patience 10; $\alpha = 0{,}1$, $\lambda_{act} = 0{,}01$, $\lambda_{comm} = 0{,}001$; mỗi cấu hình chạy 5 seed và báo cáo trung bình $\pm$ độ lệch chuẩn.
+
+\subsection{Kết quả và nhận xét}
+DAIN đạt kết quả cao nhất trên cả năm bộ dữ liệu, với mức tăng so với baseline tốt nhất là +2,6\% accuracy trên ADNI, +1,7\% trên MIMIC-IV, +2,1\% trên MM-IMDB, $-0{,}07$ MSE trên MOSI và +1,3\% trên ENRICO (đều $p<0{,}001$). Về hiệu suất, mô hình 12,8 triệu tham số nhưng mỗi lượt suy luận chỉ dùng trung bình 5,8 triệu nhờ kích hoạt thưa; số tác tử kích hoạt trung bình $\bar{\tau}$ dao động từ 3,2 đến 5,5 trên tổng 8, và mật độ đồ thị giao tiếp $\bar{\rho}$ từ 0,19 đến 0,42 tùy bộ dữ liệu.
+
+Ablation xác nhận vai trò của hai thành phần chính: bỏ điều phối động (mọi tác tử luôn bật -- DAIN-Static) làm ADNI giảm 1,7 điểm; bỏ trao đổi thông tin (DAIN-NoComm) giảm 1,4 điểm; trong khi MoE tĩnh cùng quy mô thấp hơn DAIN tới 3,4 điểm. Khi quét $\tau$, hiệu quả đạt đỉnh ở $\tau = 4$ rồi giảm nhẹ -- nhiều tác tử hơn không giúp gì vì các tác tử thừa chỉ thêm nhiễu. Phân tích khả năng diễn giải cho thấy các nhóm tác tử được dùng theo đúng trực giác dữ liệu: bệnh nhân nhận thức bình thường (ADNI) kích hoạt mạnh nhóm uniqueness, còn bệnh nhân MCI/Dementia kích hoạt mạnh nhóm synergy; thể loại phim dựa trên hình ảnh riêng biệt (Animation) dùng uniqueness, thể loại kết hợp hình ảnh và cốt truyện (Thriller) dùng synergy.
+
+Paper nêu bốn giới hạn: phân bổ nhóm tác tử là thủ công; Meta-Controller thêm chi phí không đáng kể với mô hình lớn nhưng có thể thành gánh nặng với mô hình nền rất nhẹ; đánh giá mới dừng ở phân loại và hồi quy; và mô hình kích hoạt tác tử là dữ kiện gợi ý chứ chưa phải giải thích hình thức.

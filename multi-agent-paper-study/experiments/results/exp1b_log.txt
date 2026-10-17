@@ -1,0 +1,12 @@
+Warning: You are sending unauthenticated requests to the HF Hub. Please set a HF_TOKEN to enable higher rate limits and faster downloads.
+Loading weights:   0%|          | 0/103 [00:00<?, ?it/s]Loading weights: 100%|██████████| 103/103 [00:00<00:00, 2788.60it/s]
+[k=10] xong
+[k=20] xong
+[k=40] xong
+ k      strategy  evidence_precision  evidence_recall  evidence_f1  answer_correct  selected_tokens  selection_time_ms
+10    radar_topk            0.648000         0.386232     0.480757           0.630          221.840           0.080095
+10 semantic_topk            0.670500         0.397169     0.495485           0.645          221.895           0.078180
+20    radar_topk            0.528750         0.625033     0.568908           0.710          459.275           0.082690
+20 semantic_topk            0.542250         0.641593     0.583751           0.700          457.255           0.038455
+40    radar_topk            0.348375         0.813576     0.484149           0.810          916.885           0.089150
+40 semantic_topk            0.352500         0.823618     0.489974           0.785          917.235           0.044185

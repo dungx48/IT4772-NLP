@@ -1,0 +1,20 @@
+E:\SoICT\NLP\multi-agent-paper-study\experiments\src\exp2\run_exp2.py:176: RuntimeWarning: Mean of empty slice
+  "tau_bar": round(float(np.nanmean(taus)), 2),
+E:\SoICT\NLP\multi-agent-paper-study\experiments\src\exp2\run_exp2.py:177: RuntimeWarning: Mean of empty slice
+  "rho_bar": round(float(np.nanmean(rhos)), 3),
+Thiết bị: cpu
+1460 mẫu, 20 lớp, text dim 3000
+{'model': 'early', 'tau': 4, 'acc_mean': 0.4281, 'acc_std': 0.0057, 'tau_bar': nan, 'rho_bar': nan, 'train_seconds_mean': 10.7, 'total_params': 951796}
+{'model': 'late', 'tau': 4, 'acc_mean': 0.4158, 'acc_std': 0.0107, 'tau_bar': nan, 'rho_bar': nan, 'train_seconds_mean': 11.7, 'total_params': 826634}
+{'model': 'moe', 'tau': 4, 'acc_mean': 0.3979, 'acc_std': 0.0152, 'tau_bar': 8.0, 'rho_bar': nan, 'train_seconds_mean': 14.4, 'total_params': 1481724}
+{'model': 'sparse_moe', 'tau': 4, 'acc_mean': 0.3856, 'acc_std': 0.0169, 'tau_bar': 4.0, 'rho_bar': nan, 'train_seconds_mean': 9.4, 'total_params': 1481724}
+{'model': 'dain_static', 'tau': 4, 'acc_mean': 0.3514, 'acc_std': 0.0194, 'tau_bar': 8.0, 'rho_bar': 0.434, 'train_seconds_mean': 8.8, 'total_params': 1844284}
+{'model': 'dain_nocomm', 'tau': 4, 'acc_mean': 0.3781, 'acc_std': 0.0093, 'tau_bar': 4.0, 'rho_bar': 0.308, 'train_seconds_mean': 13.8, 'total_params': 1844284}
+{'model': 'dain', 'tau': 4, 'acc_mean': 0.3856, 'acc_std': 0.0126, 'tau_bar': 4.0, 'rho_bar': 0.389, 'train_seconds_mean': 13.3, 'total_params': 1844284}
+{'tau': 1, 'acc_mean': 0.3527, 'acc_std': 0.0343, 'tau_bar': 1.0}
+{'tau': 2, 'acc_mean': 0.3849, 'acc_std': 0.0232, 'tau_bar': 2.0}
+{'tau': 4, 'acc_mean': 0.3692, 'acc_std': 0.0109, 'tau_bar': 4.0}
+{'tau': 6, 'acc_mean': 0.3788, 'acc_std': 0.0133, 'tau_bar': 6.0}
+{'tau': 8, 'acc_mean': 0.3527, 'acc_std': 0.0224, 'tau_bar': 8.0}
+Đã lưu kết quả vào E:\SoICT\NLP\multi-agent-paper-study\experiments\results
+
